@@ -1,40 +1,76 @@
-# ⚡ REBA Ergonomi Analiz Ajanı v3
+# 🦺 REBA Ergonomi Risk Analiz Ajanı v4.0
 
-**MediaPipe Pose + REBA Skorlama + Streamlit UI**
-
-Video veya görüntü yükle → iskelet tespiti → açı hesaplama → REBA skoru.
+**İSG Uzmanları için AI Destekli Hızlı Tüm Vücut Değerlendirme Aracı**
 
 ---
 
-## 🚀 Hızlı Başlangıç (Lokal)
+## 📋 Nedir?
 
+REBA (Rapid Entire Body Assessment), çalışanların kas-iskelet sistemi bozukluklarına yol açan ergonomik risk faktörlerini değerlendiren, uluslararası kabul görmüş bir yöntemdir *(Hignett & McAtamney, 2000)*.
+
+Bu araç, geleneksel kâğıt tabanlı REBA formunu **yapay zeka destekli görüntü analizi** ile birleştirerek İSG uzmanlarının saha değerlendirmelerini hızlandırır.
+
+---
+
+## 🔬 Nasıl Çalışır?
+
+```
+Video/Fotoğraf → MediaPipe Pose → Eklem Açıları → REBA Skorlama → Rapor
+```
+
+1. **Medya Yükleme** — Video (≤15 sn) veya fotoğraf yüklenir
+2. **Manuel Girdi** — Yük, tutma kalitesi ve aktivite bilgileri girilir
+3. **Pose Tespiti** — Google MediaPipe ile 33 eklem noktası tespit edilir
+4. **Açı Hesaplama** — Trigonometrik yöntemle vücut segment açıları hesaplanır
+5. **REBA Puanlama** — Tablo A, B, C üzerinden nihai skor hesaplanır
+6. **Raporlama** — Ekranda sonuç gösterilir, PDF/JSON export edilir
+
+---
+
+## 🎯 Özellikler
+
+| Özellik | Detay |
+|---------|-------|
+| **Video Analizi** | Max 15 saniye, saniyede 3 kare |
+| **Görüntü Analizi** | Tekli fotoğraf desteği |
+| **REBA Tablo A** | Boyun + Gövde + Bacak |
+| **REBA Tablo B** | Üst Kol + Alt Kol + Bilek |
+| **Yük Analizi** | kg girişi, otomatik skor, ani kuvvet seçeneği |
+| **Tutma Analizi** | 4 seviye açılır liste |
+| **Aktivite Analizi** | 3 checkbox (statik, tekrarlı, dengesiz) |
+| **En Riskli Kare** | Birden fazla maksimum skor zamanı gösterilir |
+| **İskelet Overlay** | Renk kodlu iskelet çizimi |
+| **PDF Raporu** | Tam form bilgileri + kare bazlı analiz |
+| **JSON Export** | Ham veri indirme |
+| **Form Bilgileri** | Bölüm, İş İstasyonu, İş Adımı, Tarih |
+
+---
+
+## 🚦 Risk Skalası
+
+| Skor | Risk Seviyesi | Önlem |
+|------|--------------|-------|
+| 1 | 🟢 Önemsiz | Herhangi bir önlem gerekmez |
+| 2-3 | 🟡 Düşük | Gerekirse iyileştirme yap |
+| 4-7 | 🟠 Orta Seviyeli | Ayrıntılı incele, değişiklik planla |
+| 8-10 | 🔴 Yüksek | Araştırma yap ve aksiyon al |
+| 11+ | ⛔ Çok Yüksek | Derhal revize et |
+
+---
+
+## 🚀 Kurulum ve Çalıştırma
+
+### Lokal (Terminal)
 ```bash
-# 1. Repo'yu klonla veya dosyaları indir
-# 2. Bağımlılıkları kur
 pip install -r requirements.txt
-
-# 3. Çalıştır
 streamlit run reba_agent.py
 ```
 
-Tarayıcıda `http://localhost:8501` açılır.
-
----
-
-## ☁️ Streamlit Cloud'a Deploy (Ücretsiz)
-
-1. GitHub'da yeni repo oluştur
-2. Bu dosyaları push et:
-   ```
-   reba_agent.py
-   requirements.txt
-   .streamlit/config.toml
-   ```
-3. [share.streamlit.io](https://share.streamlit.io) adresine git
-4. "New app" → GitHub repo'nu seç → `reba_agent.py` belirt
-5. Deploy → URL'yi arkadaşlarına paylaş
-
-**API key gerekmez!** Tüm analiz client-side (MediaPipe) çalışır.
+### Streamlit Cloud (Ücretsiz Deploy)
+1. Bu repo'yu fork et
+2. [share.streamlit.io](https://share.streamlit.io) → "New app"
+3. `reba_agent.py` dosyasını seç
+4. Deploy → URL'yi paylaş
 
 ---
 
@@ -42,45 +78,32 @@ Tarayıcıda `http://localhost:8501` açılır.
 
 ```
 reba-ergonomi-agent/
-├── reba_agent.py          # Ana uygulama (tek dosya)
+├── reba_agent.py          # Ana uygulama
 ├── requirements.txt       # Python bağımlılıkları
-├── .streamlit/
-│   └── config.toml        # Tema ve yapılandırma
-└── README.md
+├── packages.txt           # Sistem kütüphaneleri (Debian)
+└── .streamlit/
+    └── config.toml        # Tema ve sunucu ayarları
 ```
 
 ---
 
-## 🔧 Teknik Mimari
+## ⚠️ Sınırlılıklar ve Dikkat Edilmesi Gerekenler
 
-| Katman | Teknoloji | Detay |
-|--------|-----------|-------|
-| Pose Estimation | MediaPipe Pose | 33 landmark, model_complexity=2 |
-| Açı Hesaplama | NumPy + Trigonometri | arccos / atan2 bazlı |
-| REBA Engine | Pure Python | Tablo A, B, C tam implementasyon |
-| Video İşleme | OpenCV | FPS örnekleme, boyut optimizasyonu |
-| UI | Streamlit | Dark tema, responsive |
-| Görselleştirme | OpenCV overlay | İskelet + skor çizimi |
+- AI açı tahmini **±3-5°** doğruluk payı içerir
+- Kamera açısı sonucu doğrudan etkiler — **yan veya 45° açı** ideal
+- Düşük ışık, aşırı örtme veya hızlı hareket tespiti zorlaştırır
+- Bu araç profesyonel ergonomi uzmanı değerlendirmesinin **yerini tutmaz**; tamamlayıcı niteliktedir
+- **Yük, tutma ve aktivite** bilgileri manuel girilmelidir — AI bu parametreleri hesaplamaz
 
 ---
 
-## 📊 Desteklenen Formatlar
+## 📚 Referans
 
-- **Video:** MP4, MOV, M4V, WEBM, AVI, MKV
-- **Görüntü:** JPG, PNG, WEBP, BMP, HEIC
-
----
-
-## ⚠️ Sınırlılıklar
-
-- Kamera açısı sonucu etkiler (ideal: yan veya 45° açı)
-- Açı doğruluğu: ±3-5° (Claude Vision'dan 3-5x daha iyi)
-- Birden fazla kişi varsa sadece ilk tespit edilen analiz edilir
-- Profesyonel ergonomi değerlendirmesinin yerini tutmaz
+> Hignett, S. & McAtamney, L. (2000). Rapid Entire Body Assessment (REBA).
+> *Applied Ergonomics*, 31(2), 201-205.
 
 ---
 
-## 📖 Referans
+## 📄 Lisans
 
-- Hignett, S. & McAtamney, L. (2000). REBA: A Survey Method for Investigation of Work-Related Upper Limb Disorders. *Applied Ergonomics*, 31, 201-205.
-- Google MediaPipe Pose: https://developers.google.com/mediapipe/solutions/vision/pose_landmarker
+Kurumsal iç kullanım için geliştirilmiştir.
