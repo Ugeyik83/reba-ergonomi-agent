@@ -1,23 +1,10 @@
 """
-REBA Ergonomi Analiz Ajanı v3.0
+REBA Ergonomi Analiz Ajanı v3.2
 ================================
 MediaPipe Pose + REBA Scoring Engine + Streamlit UI
-Video/Görüntü yükle → İskelet tespiti → Açı hesaplama → REBA skoru
-
-Kurulum:
-    pip install streamlit mediapipe opencv-python-headless numpy Pillow
-
-Çalıştırma:
-    streamlit run reba_agent.py
-
-Deployment (Streamlit Cloud):
-    1. GitHub'a push et
-    2. share.streamlit.io → repo bağla
-    3. URL'yi arkadaşlarına paylaş
 """
 
 import streamlit as st
-import mediapipe as mp
 import cv2
 import numpy as np
 import math
@@ -29,6 +16,7 @@ from PIL import Image
 import io
 import json
 from datetime import datetime
+import mediapipe as mp
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 1. CONFIGURATION
