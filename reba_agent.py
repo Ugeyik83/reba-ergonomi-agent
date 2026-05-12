@@ -487,7 +487,7 @@ def process_frames(frames: list, fps: float, load_kg: float, coupling: int,
     
     pose = mp.solutions.pose.Pose(
         static_image_mode=True,         # Her kare bağımsız
-        model_complexity=2,             # En yüksek doğruluk
+        model_complexity=1,             # orta - default, indirme gerekmez
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5
     )
