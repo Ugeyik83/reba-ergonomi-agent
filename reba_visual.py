@@ -431,9 +431,14 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
             img_buf = img_buffers[fs.idx]
             img_buf.seek(0)
             img_w = 12*cm
-            rl_img = RLImage(img_buf, width=img_w)
             oh, ow = fs.overlay_img.shape[:2]
-            rl_img.height = img_w * (oh / ow)
+            img_h = img_w * (oh / ow)
+            # Sayfa yüksekliği sınırı: başlık+tablo için ~8cm bırak
+            max_h = 16*cm
+            if img_h > max_h:
+                img_h = max_h
+                img_w = img_h * (ow / oh)
+            rl_img = RLImage(img_buf, width=img_w, height=img_h)
             story.append(rl_img)
             story.append(Spacer(1, 0.3*cm))
 
