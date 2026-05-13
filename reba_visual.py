@@ -282,22 +282,23 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     # ══════════════════════════════════════════════════
 
     story.append(P("REBA Ergonomi Risk Analiz Raporu",
-                   bold=True, size=18, color=KOYU, space_after=2))
+                   bold=True, size=18, color=KOYU, space_after=6))
+    story.append(Spacer(1, 0.15*cm))
     story.append(P(
         "Rapid Entire Body Assessment  |  AI Destekli Postur Analizi  |  v5.1",
-        size=9, color=colors.HexColor('#64748b'), space_after=8))
+        size=8, color=colors.HexColor('#64748b'), space_after=10))
     story.append(HRFlowable(width="100%", thickness=2, color=KOYU))
     story.append(Spacer(1, 0.4*cm))
 
     # Form bilgileri
     story.append(P("Form Bilgileri", bold=True, size=11, color=KOYU, space_after=4))
     fr = [
-        [P("Bolum", bold=True),     form_bilgi.get('bolum', '—'),
-         P("Tarih", bold=True),     form_bilgi.get('tarih', '—')],
-        [P("Is Istasyonu", bold=True), form_bilgi.get('is_istasyonu', '—'),
-         P("Analist", bold=True),   form_bilgi.get('analist', '—')],
-        [P("Is Adimi", bold=True),  form_bilgi.get('is_adimi', '—'),
-         P("Olusturma", bold=True), datetime.now().strftime('%d.%m.%Y %H:%M')],
+        [P("Bölüm", bold=True),          form_bilgi.get('bolum', '—'),
+         P("Tarih", bold=True),           form_bilgi.get('tarih', '—')],
+        [P("İş İstasyonu", bold=True),    form_bilgi.get('is_istasyonu', '—'),
+         P("Analist", bold=True),         form_bilgi.get('analist', '—')],
+        [P("İş Adımı", bold=True),        form_bilgi.get('is_adimi', '—'),
+         P("Oluşturma", bold=True),       datetime.now().strftime('%d.%m.%Y %H:%M')],
     ]
     tf = Table(fr, colWidths=[3.5*cm, 5.5*cm, 3.5*cm, 5.5*cm])
     tf.setStyle(TableStyle([
@@ -313,12 +314,12 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     # Manuel parametreler
     story.append(P("Manuel Girdi Parametreleri", bold=True, size=11, color=KOYU, space_after=4))
     mr = [
-        ["Parametre", "Deger", "Aciklama"],
-        [f"Yuk: {form_bilgi.get('yuk_kg', 0)} kg",
+        ["Parametre", "Değer", "Açıklama"],
+        [f"Yük: {form_bilgi.get('yuk_kg', 0)} kg",
          f"+{form_bilgi.get('yuk_skoru', 0)}",
          form_bilgi.get('yuk_aciklama', '')],
-        ["Ani/Hizli Kuvvet",
-         "Evet" if form_bilgi.get('shock') else "Hayir",
+        ["Ani/Hızlı Kuvvet",
+         "Evet" if form_bilgi.get('shock') else "Hayır",
          "+1 eklendi" if form_bilgi.get('shock') else "—"],
         ["Tutma Kalitesi",
          f"+{form_bilgi.get('tutma', 0)}",
@@ -333,9 +334,9 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(Spacer(1, 0.4*cm))
 
     # Genel özet
-    story.append(P("Genel Degerlendirme Ozeti", bold=True, size=11, color=KOYU, space_after=4))
+    story.append(P("Genel Değerlendirme Özeti", bold=True, size=11, color=KOYU, space_after=4))
     oz = [
-        ["Fotograf Sayisi", "Ortalama REBA", "En Yuksek REBA", "Risk Seviyesi"],
+        ["Fotoğraf Sayısı", "Ortalama REBA", "En Yüksek REBA", "Risk Seviyesi"],
         [str(len(gecerli)), f"{ort:.1f}", str(max(skorlar)), en_yuk_obj.risk_seviyesi],
     ]
     to = Table(oz, colWidths=[4*cm, 4*cm, 4*cm, 6*cm])
@@ -351,8 +352,8 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(Spacer(1, 0.4*cm))
 
     # Foto özet tablosu
-    story.append(P("Fotograf Bazli REBA Skorlari", bold=True, size=11, color=KOYU, space_after=4))
-    fh = ["No","REBA","Risk","Boyun","Govde","Bacak","UstKol","AltKol","Bilek","SkorA","SkorB"]
+    story.append(P("Fotoğraf Bazlı REBA Skorları", bold=True, size=11, color=KOYU, space_after=4))
+    fh = ["No","REBA","Risk","Boyun","Gövde","Bacak","ÜstKol","AltKol","Bilek","SkorA","SkorB"]
     frows = [fh]
     for i, fs in enumerate(gecerli, 1):
         s = fs.skor
@@ -376,14 +377,14 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(Spacer(1, 0.4*cm))
 
     # Risk skalası
-    story.append(P("REBA Risk Skalasi", bold=True, size=11, color=KOYU, space_after=4))
+    story.append(P("REBA Risk Skalası", bold=True, size=11, color=KOYU, space_after=4))
     rsr = [
-        ["Skor", "Risk Seviyesi", "Onlem"],
-        ["1",    "Onemsiz Risk",       "Herhangi bir onlem gerekmez"],
-        ["2-3",  "Dusuk Risk",         "Gerekirse iyilestirme yapilabilir"],
-        ["4-7",  "Orta Seviyeli Risk", "Daha ayrintili incele, degisiklik planla"],
-        ["8-10", "Yuksek Risk",        "Arastirma yap ve aksiyon al"],
-        ["11+",  "Cok Yuksek Risk",    "Surec calisismaya uygun degil, derhal revize et"],
+        ["Skor", "Risk Seviyesi", "Önlem"],
+        ["1",    "Önemsiz Risk",       "Herhangi bir önlem gerekmez"],
+        ["2-3",  "Düşük Risk",         "Gerekirse iyileştirme yapılabilir"],
+        ["4-7",  "Orta Seviyeli Risk", "Daha ayrıntılı incele, değişiklik planla"],
+        ["8-10", "Yüksek Risk",        "Araştırma yap ve aksiyon al"],
+        ["11+",  "Çok Yüksek Risk",    "Süreç çalışmaya uygun değil, derhal revize et"],
     ]
     trs = Table(rsr, colWidths=[2*cm, 4.5*cm, 11.5*cm])
     strs = ts_base()
@@ -416,11 +417,12 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
         s = fs.skor
         a = s.acılar
 
-        story.append(P(f"Fotograf {idx}  —  Detayli REBA Analizi",
-                       bold=True, size=16, color=KOYU, space_after=2))
+        story.append(P(f"Fotoğraf {idx}  —  Detaylı REBA Analizi",
+                       bold=True, size=16, color=KOYU, space_after=6))
+        story.append(Spacer(1, 0.1*cm))
         story.append(P(
             f"REBA Skoru: {s.final_skor}/15  |  {s.risk_seviyesi}  |  {s.aksiyon}",
-            size=9, color=colors.HexColor('#64748b'), space_after=6))
+            size=8, color=colors.HexColor('#64748b'), space_after=10))
         story.append(HRFlowable(width="100%", thickness=1.5, color=KOYU))
         story.append(Spacer(1, 0.3*cm))
 
@@ -428,7 +430,7 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
         if fs.idx in img_buffers:
             img_buf = img_buffers[fs.idx]
             img_buf.seek(0)
-            img_w = 16*cm
+            img_w = 12*cm
             rl_img = RLImage(img_buf, width=img_w)
             oh, ow = fs.overlay_img.shape[:2]
             rl_img.height = img_w * (oh / ow)
@@ -447,39 +449,39 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
 
             def _mod_boyun():
                 m = []
-                if a.boyun_yan_egim > 15: m.append("Yana egme +1")
-                if a.boyun_donus: m.append("Donus +1")
+                if a.boyun_yan_egim > 15: m.append("Yana eğme +1")
+                if a.boyun_donus: m.append("Dönüş +1")
                 return ", ".join(m) or "—"
 
             def _mod_govde():
                 m = []
-                if a.govde_yan_egim > 10: m.append("Yana egme +1")
-                if a.govde_donus: m.append("Donus +1")
+                if a.govde_yan_egim > 10: m.append("Yana eğme +1")
+                if a.govde_donus: m.append("Dönüş +1")
                 return ", ".join(m) or "—"
 
             def _mod_ustkol():
                 m = []
-                if a.omuz_kalkmis: m.append("Omuz kalkis +1")
-                if a.kol_abdukte: m.append("Abduksiyon +1")
+                if a.omuz_kalkmis: m.append("Omuz kalkış +1")
+                if a.kol_abdukte: m.append("Abdüksiyon +1")
                 if a.kol_destekli: m.append("Destekli -1")
                 return ", ".join(m) or "—"
 
-            sr = [["Segment", "Aci (derece)", "Temel", "Modifikator", "Final"]]
+            sr = [["Segment", "Açı (derece)", "Temel", "Modifikatör", "Final"]]
             sr.append(["Boyun",    f"{a.boyun_flexion:.1f}",
                        str(_temel_boyun(a.boyun_flexion)), _mod_boyun(), str(s.boyun_skoru)])
-            sr.append(["Govde",    f"{a.govde_flexion:.1f}",
+            sr.append(["Gövde",    f"{a.govde_flexion:.1f}",
                        str(_temel_govde(a.govde_flexion)), _mod_govde(), str(s.govde_skoru)])
             sr.append(["Bacak/Diz",
                        f"{max(a.diz_flexion_sol, a.diz_flexion_sag):.1f}",
                        "1" if a.bilateral_destek else "2", "—", str(s.bacak_skoru)])
-            sr.append(["Ust Kol",  f"{a.ust_kol_aci:.1f}",
+            sr.append(["Üst Kol",  f"{a.ust_kol_aci:.1f}",
                        str(1 if a.ust_kol_aci<=20 else 2 if a.ust_kol_aci<=45 else 3 if a.ust_kol_aci<=90 else 4),
                        _mod_ustkol(), str(s.ust_kol_skoru)])
             sr.append(["Alt Kol",  f"{a.alt_kol_aci:.1f}",
                        "1" if 60 <= a.alt_kol_aci <= 100 else "2", "—", str(s.alt_kol_skoru)])
             sr.append(["Bilek",    f"{a.bilek_aci:.1f}",
                        "1" if a.bilek_aci <= 15 else "2",
-                       "Donus +1" if a.bilek_donus else "—", str(s.bilek_skoru)])
+                       "Dönüş +1" if a.bilek_donus else "—", str(s.bilek_skoru)])
 
             tseg = Table(sr, colWidths=[3.5*cm, 3*cm, 2.5*cm, 4.5*cm, 2.5*cm])
             tseg.setStyle(ts_base())
@@ -489,15 +491,15 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
         # Skor hesaplama tablosu
         story.append(P("Skor Hesaplama", bold=True, size=11, color=KOYU, space_after=4))
         hr = [
-            ["Adim", "Hesaplama", "Sonuc"],
+            ["Adım", "Hesaplama", "Sonuç"],
             ["Tablo A",
-             f"Govde({s.govde_skoru}) x Boyun({s.boyun_skoru}) x Bacak({s.bacak_skoru})",
+             f"Gövde({s.govde_skoru}) x Boyun({s.boyun_skoru}) x Bacak({s.bacak_skoru})",
              str(s.tablo_a)],
             ["Skor A",
-             f"Tablo A({s.tablo_a}) + Yuk Skoru({s.yuk_skoru})",
+             f"Tablo A({s.tablo_a}) + Yük Skoru({s.yuk_skoru})",
              str(s.skor_a)],
             ["Tablo B",
-             f"UstKol({s.ust_kol_skoru}) x AltKol({s.alt_kol_skoru}) x Bilek({s.bilek_skoru})",
+             f"ÜstKol({s.ust_kol_skoru}) x AltKol({s.alt_kol_skoru}) x Bilek({s.bilek_skoru})",
              str(s.tablo_b)],
             ["Skor B",
              f"Tablo B({s.tablo_b}) + Tutma Skoru({s.tutma_skoru})",
