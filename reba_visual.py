@@ -394,95 +394,105 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     sk = en_yuk_fs.skor
     ac = sk.acılar
 
-    story.append(P("REBA Worksheet — En Yüksek Skorlu Analiz", bold=True, size=10, color=KOYU, space_after=4))
+    story.append(P("REBA Worksheet — En Yüksek Skorlu Analiz",
+                   bold=True, size=10, color=KOYU, space_after=4))
 
-    # A grubu tablosu
-    a_header = ["A Grubu", "Açı", "Skor", "Modifikatör"]
-    a_rows = [a_header]
-
-    # Boyun detay
+    # Modifikatör metinleri
     boyun_mod = []
     if ac and ac.boyun_extension: boyun_mod.append("Extension +1")
-    if ac and ac.boyun_yan_egim > 15: boyun_mod.append("Yana eğme +1")
+    if ac and ac.boyun_yan_egim > 15: boyun_mod.append(f"Yana eğme +1")
     if ac and ac.boyun_donus: boyun_mod.append("Dönüş +1")
-    a_rows.append(["Boyun", f"{ac.boyun_flexion:.0f}°" if ac else "—",
-                   str(sk.boyun_skoru), ", ".join(boyun_mod) or "—"])
 
     govde_mod = []
     if ac and ac.govde_extension: govde_mod.append("Extension +1")
     if ac and ac.govde_yan_egim > 10: govde_mod.append("Yana eğme +1")
     if ac and ac.govde_donus: govde_mod.append("Dönüş +1")
-    a_rows.append(["Gövde", f"{ac.govde_flexion:.0f}°" if ac else "—",
-                   str(sk.govde_skoru), ", ".join(govde_mod) or "—"])
-
-    diz_max = max(ac.diz_flexion_sol, ac.diz_flexion_sag) if ac else 0
-    a_rows.append(["Bacak", f"Diz {diz_max:.0f}°",
-                   str(sk.bacak_skoru),
-                   "Bilateral" if (ac and ac.bilateral_destek) else "Tek ayak"])
-
-    a_rows.append(["", "", "", ""])
-    a_rows.append(["Tablo A", "", str(sk.tablo_a), ""])
-    a_rows.append(["+ Yük", "", f"+{sk.yuk_skoru}", ""])
-    a_rows.append(["= Skor A", "", str(sk.skor_a), ""])
-
-    ta = Table(a_rows, colWidths=[2.5*cm, 3*cm, 2*cm, 5*cm])
-    tsa = ts_base()
-    tsa.add('FONTNAME', (0,-1), (0,-1), FONT_BOLD)
-    tsa.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.skor_a))
-    tsa.add('FONTNAME', (2,-1), (2,-1), FONT_BOLD)
-    ta.setStyle(tsa)
-
-    # B grubu tablosu
-    b_header = ["B Grubu", "Açı", "Skor", "Modifikatör"]
-    b_rows = [b_header]
 
     ukol_mod = []
     if ac and ac.omuz_kalkmis: ukol_mod.append("Omuz kalkış +1")
     if ac and ac.kol_abdukte: ukol_mod.append("Abdüksiyon +1")
     if ac and ac.kol_destekli: ukol_mod.append("Destekli -1")
+
     taraf = ac.analiz_tarafi if ac else "—"
-    b_rows.append([f"Üst Kol ({taraf})", f"{ac.ust_kol_aci:.0f}°" if ac else "—",
-                   str(sk.ust_kol_skoru), ", ".join(ukol_mod) or "—"])
-    b_rows.append([f"Alt Kol ({taraf})", f"{ac.alt_kol_aci:.0f}°" if ac else "—",
-                   str(sk.alt_kol_skoru), "60-100° arası" if sk.alt_kol_skoru==1 else "Aralık dışı"])
-    b_rows.append([f"Bilek ({taraf})", f"{ac.bilek_aci:.0f}°" if ac else "—",
-                   str(sk.bilek_skoru), "Dönüş +1" if (ac and ac.bilek_donus) else "—"])
+    diz_max = max(ac.diz_flexion_sol, ac.diz_flexion_sag) if ac else 0
 
-    b_rows.append(["", "", "", ""])
-    b_rows.append(["Tablo B", "", str(sk.tablo_b), ""])
-    b_rows.append(["+ Tutma", "", f"+{sk.tutma_skoru}", ""])
-    b_rows.append(["= Skor B", "", str(sk.skor_b), ""])
+    # A GRUBU — tek tablo
+    story.append(P("A Grubu: Boyun — Gövde — Bacak",
+                   bold=True, size=9, color=KOYU, space_after=3))
+    a_rows = [
+        ["Segment", "Açı", "Skor", "Modifikatör"],
+        ["Boyun",
+         f"{ac.boyun_flexion:.0f}°" if ac else "—",
+         str(sk.boyun_skoru),
+         ", ".join(boyun_mod) or "—"],
+        ["Gövde",
+         f"{ac.govde_flexion:.0f}°" if ac else "—",
+         str(sk.govde_skoru),
+         ", ".join(govde_mod) or "—"],
+        ["Bacak",
+         f"Diz {diz_max:.0f}°",
+         str(sk.bacak_skoru),
+         "Bilateral" if (ac and ac.bilateral_destek) else "Tek ayak"],
+        [P("Tablo A", bold=True), "", P(str(sk.tablo_a), bold=True), ""],
+        [P("+ Yük Skoru", bold=True), "", f"+{sk.yuk_skoru}", ""],
+        [P("= Skor A", bold=True), "",
+         P(str(sk.skor_a), bold=True), ""],
+    ]
+    ta = Table(a_rows, colWidths=[4*cm, 3*cm, 2.5*cm, 8.5*cm])
+    tsa = ts_base()
+    tsa.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.skor_a))
+    tsa.add('FONTSIZE', (2,-1), (2,-1), 11)
+    tsa.add('BACKGROUND', (0,-1), (-1,-1), ACIK)
+    ta.setStyle(tsa)
+    story.append(ta)
+    story.append(Spacer(1, 0.25*cm))
 
-    tb = Table(b_rows, colWidths=[3.5*cm, 2.5*cm, 2*cm, 4.5*cm])
+    # B GRUBU — tek tablo
+    story.append(P("B Grubu: Üst Kol — Alt Kol — Bilek",
+                   bold=True, size=9, color=KOYU, space_after=3))
+    b_rows = [
+        ["Segment", "Açı", "Skor", "Modifikatör"],
+        [f"Üst Kol ({taraf})",
+         f"{ac.ust_kol_aci:.0f}°" if ac else "—",
+         str(sk.ust_kol_skoru),
+         ", ".join(ukol_mod) or "—"],
+        [f"Alt Kol ({taraf})",
+         f"{ac.alt_kol_aci:.0f}°" if ac else "—",
+         str(sk.alt_kol_skoru),
+         "60-100° arası" if sk.alt_kol_skoru == 1 else "Aralık dışı"],
+        [f"Bilek ({taraf})",
+         f"{ac.bilek_aci:.0f}°" if ac else "—",
+         str(sk.bilek_skoru),
+         "Dönüş +1" if (ac and ac.bilek_donus) else "—"],
+        [P("Tablo B", bold=True), "", P(str(sk.tablo_b), bold=True), ""],
+        [P("+ Tutma Skoru", bold=True), "", f"+{sk.tutma_skoru}", ""],
+        [P("= Skor B", bold=True), "",
+         P(str(sk.skor_b), bold=True), ""],
+    ]
+    tb = Table(b_rows, colWidths=[4*cm, 3*cm, 2.5*cm, 8.5*cm])
     tsb = ts_base()
-    tsb.add('FONTNAME', (0,-1), (0,-1), FONT_BOLD)
     tsb.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.skor_b))
-    tsb.add('FONTNAME', (2,-1), (2,-1), FONT_BOLD)
+    tsb.add('FONTSIZE', (2,-1), (2,-1), 11)
+    tsb.add('BACKGROUND', (0,-1), (-1,-1), ACIK)
     tb.setStyle(tsb)
+    story.append(tb)
+    story.append(Spacer(1, 0.25*cm))
 
-    # Yan yana: A grubu | B grubu
-    ws = Table([[ta, tb]], colWidths=[13*cm, 13*cm])
-    ws.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('PADDING', (0,0), (-1,-1), 2),
-    ]))
-    story.append(ws)
-    story.append(Spacer(1, 0.3*cm))
-
-    # Final skor kutusu
+    # FİNAL SKOR
+    story.append(P("Final Hesaplama", bold=True, size=9, color=KOYU, space_after=3))
     final_rows = [
         ["Adım", "Hesaplama", "Sonuç"],
-        ["Tablo C", f"Skor A({sk.skor_a}) × Skor B({sk.skor_b})", str(sk.skor_c)],
+        ["Tablo C",
+         f"Skor A({sk.skor_a}) × Skor B({sk.skor_b})",
+         str(sk.skor_c)],
         ["+ Aktivite", f"+{sk.aktivite_skoru}", ""],
-        ["NİHAİ REBA", "", str(sk.final_skor)],
+        [P("NİHAİ REBA", bold=True), "", P(str(sk.final_skor), bold=True)],
     ]
-    tfin = Table(final_rows, colWidths=[4*cm, 8*cm, 5*cm])
+    tfin = Table(final_rows, colWidths=[4*cm, 9*cm, 5*cm])
     stfin = ts_base()
-    stfin.add('FONTNAME', (0,-1), (-1,-1), FONT_BOLD)
-    stfin.add('FONTSIZE', (2,-1), (2,-1), 14)
+    stfin.add('FONTSIZE',  (2,-1), (2,-1), 14)
     stfin.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.final_skor))
     stfin.add('BACKGROUND', (0,-1), (-1,-1), rk(sk.final_skor))
-    stfin.add('ALIGN', (0,0), (-1,-1), 'CENTER')
     tfin.setStyle(stfin)
     story.append(tfin)
     story.append(Spacer(1, 0.3*cm))
