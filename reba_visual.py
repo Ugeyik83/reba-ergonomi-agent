@@ -677,3 +677,368 @@ def _aksiyon_onerisi(skor: REBASkoru) -> List[str]:
         oneriler.append("Mevcut risk seviyesi için genel izleme yeterlidir.")
 
     return oneriler
+
+
+# ════════════════════════════════════════════════════════
+# VİDEO PDF RAPORU
+# ════════════════════════════════════════════════════════
+
+def video_pdf_olustur(
+    form_bilgi: dict,
+    video_sonuclari: list,
+    en_riskli_frame: 'np.ndarray',
+    en_riskli_skor: 'REBASkoru',
+    sure_sn: float,
+) -> bytes:
+    """
+    Video analizi için 2 sayfalık PDF rapor.
+    Sayfa 1: Özet + metrikler + risk dağılımı + frame tablosu + en riskli kare
+    Sayfa 2: Worksheet + segment analizi + explainable AI + aksiyonlar
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer,
+        Table, TableStyle, HRFlowable, PageBreak, Image as RLImage,
+    )
+
+    if not video_sonuclari:
+        return b""
+
+    FONT, FONT_BOLD = _turkce_font_yukle()
+
+    tum_skorlar = [v['skor'] for v in video_sonuclari]
+    ort = sum(tum_skorlar) / len(tum_skorlar)
+    en_yuk = max(tum_skorlar)
+    en_dus = min(tum_skorlar)
+    sorted_s = sorted(tum_skorlar)
+    p90 = sorted_s[min(int(len(sorted_s) * 0.9), len(sorted_s)-1)]
+
+    dagilim = {'Önemsiz/Düşük': 0, 'Orta': 0, 'Yüksek': 0, 'Çok Yüksek': 0}
+    for s in tum_skorlar:
+        if s <= 3: dagilim['Önemsiz/Düşük'] += 1
+        elif s <= 7: dagilim['Orta'] += 1
+        elif s <= 10: dagilim['Yüksek'] += 1
+        else: dagilim['Çok Yüksek'] += 1
+
+    KOYU  = colors.HexColor('#1e3a5f')
+    ACIK  = colors.HexColor('#f0f4f8')
+    CIZGI = colors.HexColor('#cbd5e1')
+
+    def rk(skor):
+        if skor <= 1:   return colors.HexColor('#dcfce7')
+        elif skor <= 3: return colors.HexColor('#ecfccb')
+        elif skor <= 7: return colors.HexColor('#fef9c3')
+        elif skor <= 10: return colors.HexColor('#fee2e2')
+        else:           return colors.HexColor('#ede9fe')
+
+    def rt(skor):
+        if skor <= 1:   return colors.HexColor('#16a34a')
+        elif skor <= 3: return colors.HexColor('#65a30d')
+        elif skor <= 7: return colors.HexColor('#d97706')
+        elif skor <= 10: return colors.HexColor('#dc2626')
+        else:           return colors.HexColor('#7c3aed')
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            rightMargin=1.5*cm, leftMargin=1.5*cm,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
+    ss = getSampleStyleSheet()
+
+    def P(txt, bold=False, size=9, color=colors.black, space_after=0):
+        fn = FONT_BOLD if bold else FONT
+        st = ParagraphStyle('x', parent=ss['Normal'],
+                            fontName=fn, fontSize=size,
+                            textColor=color, spaceAfter=space_after)
+        return Paragraph(txt, st)
+
+    def ts_base():
+        return TableStyle([
+            ('FONTNAME',  (0,0), (-1,-1), FONT),
+            ('FONTNAME',  (0,0), (-1, 0), FONT_BOLD),
+            ('FONTSIZE',  (0,0), (-1,-1), 8),
+            ('BACKGROUND',(0,0), (-1, 0), KOYU),
+            ('TEXTCOLOR', (0,0), (-1, 0), colors.white),
+            ('GRID',      (0,0), (-1,-1), 0.4, CIZGI),
+            ('PADDING',   (0,0), (-1,-1), 4),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, ACIK]),
+            ('VALIGN',    (0,0), (-1,-1), 'MIDDLE'),
+        ])
+
+    story = []
+
+    # ══════════════════════════════════════
+    # SAYFA 1 — ÖZET + TABLO + GÖRSEL
+    # ══════════════════════════════════════
+
+    story.append(P("REBA Video Analiz Raporu",
+                   bold=True, size=18, color=KOYU, space_after=6))
+    story.append(Spacer(1, 0.1*cm))
+    story.append(P(
+        "Rapid Entire Body Assessment  |  Video Postür Analizi  |  v5.2",
+        size=8, color=colors.HexColor('#64748b'), space_after=10))
+    story.append(HRFlowable(width="100%", thickness=2, color=KOYU))
+    story.append(Spacer(1, 0.3*cm))
+
+    # Form bilgileri
+    story.append(P("Form Bilgileri", bold=True, size=10, color=KOYU, space_after=4))
+    fr = [
+        [P("Bölüm", bold=True),       form_bilgi.get('bolum', '—'),
+         P("Tarih", bold=True),        form_bilgi.get('tarih', '—')],
+        [P("İş İstasyonu", bold=True), form_bilgi.get('is_istasyonu', '—'),
+         P("Analist", bold=True),      form_bilgi.get('analist', '—')],
+        [P("İş Adımı", bold=True),     form_bilgi.get('is_adimi', '—'),
+         P("Video Süresi", bold=True), f"{sure_sn:.0f} sn · {len(tum_skorlar)} kare"],
+    ]
+    tf = Table(fr, colWidths=[3.5*cm, 5*cm, 3.5*cm, 5*cm])
+    tf.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), FONT),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('BACKGROUND', (0,0), (-1,-1), ACIK),
+        ('GRID', (0,0), (-1,-1), 0.4, CIZGI),
+        ('PADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(tf)
+    story.append(Spacer(1, 0.3*cm))
+
+    # Manuel parametreler
+    story.append(P("Manuel Parametreler", bold=True, size=10, color=KOYU, space_after=3))
+    mp_rows = [[
+        "Yük", f"+{form_bilgi.get('yuk_skoru',0)} ({form_bilgi.get('yuk_kg',0)} kg)",
+        "Tutma", f"+{form_bilgi.get('tutma',0)} ({form_bilgi.get('tutma_label','')})",
+        "Aktivite", f"+{form_bilgi.get('aktivite',0)}",
+    ]]
+    tmp = Table(mp_rows, colWidths=[2*cm, 4*cm, 2*cm, 5*cm, 2.5*cm, 2.5*cm])
+    tmp.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), FONT),
+        ('FONTSIZE', (0,0), (-1,-1), 7.5),
+        ('BACKGROUND', (0,0), (-1,-1), ACIK),
+        ('GRID', (0,0), (-1,-1), 0.3, CIZGI),
+        ('PADDING', (0,0), (-1,-1), 3),
+        ('FONTNAME', (0,0), (0,0), FONT_BOLD),
+        ('FONTNAME', (2,0), (2,0), FONT_BOLD),
+        ('FONTNAME', (4,0), (4,0), FONT_BOLD),
+    ]))
+    story.append(tmp)
+    story.append(Spacer(1, 0.3*cm))
+
+    # Metrikler tablosu
+    story.append(P("Genel Metrikler", bold=True, size=10, color=KOYU, space_after=4))
+    met_rows = [
+        ["Ortalama REBA", "%90 Persentil", "En Yüksek", "En Düşük"],
+        [f"{ort:.1f}", str(p90), str(en_yuk), str(en_dus)],
+    ]
+    tm = Table(met_rows, colWidths=[4.5*cm, 4.5*cm, 4.5*cm, 4.5*cm])
+    stm = ts_base()
+    stm.add('ALIGN', (0,0), (-1,-1), 'CENTER')
+    stm.add('FONTSIZE', (0,1), (-1,1), 13)
+    stm.add('FONTNAME', (0,1), (-1,1), FONT_BOLD)
+    stm.add('TEXTCOLOR', (0,1), (0,1), rt(round(ort)))
+    stm.add('TEXTCOLOR', (1,1), (1,1), rt(p90))
+    stm.add('TEXTCOLOR', (2,1), (2,1), rt(en_yuk))
+    stm.add('PADDING', (0,0), (-1,-1), 8)
+    tm.setStyle(stm)
+    story.append(tm)
+    story.append(Spacer(1, 0.3*cm))
+
+    # Risk dağılımı
+    story.append(P("Risk Dağılımı", bold=True, size=10, color=KOYU, space_after=4))
+    dag_rows = [["Risk Seviyesi", "Kare Sayısı", "Yüzde"]]
+    renk_map_pdf = {
+        'Önemsiz/Düşük': colors.HexColor('#dcfce7'),
+        'Orta': colors.HexColor('#fef9c3'),
+        'Yüksek': colors.HexColor('#fee2e2'),
+        'Çok Yüksek': colors.HexColor('#ede9fe'),
+    }
+    for seviye, sayi in dagilim.items():
+        pct = sayi / len(tum_skorlar) * 100 if tum_skorlar else 0
+        dag_rows.append([seviye, str(sayi), f"{pct:.0f}%"])
+    td = Table(dag_rows, colWidths=[7*cm, 5*cm, 6*cm])
+    std = ts_base()
+    for i, seviye in enumerate(dagilim.keys(), 1):
+        std.add('BACKGROUND', (0,i), (-1,i), renk_map_pdf[seviye])
+    std.add('ALIGN', (1,0), (-1,-1), 'CENTER')
+    td.setStyle(std)
+    story.append(td)
+    story.append(Spacer(1, 0.3*cm))
+
+    # En riskli kare görseli
+    if en_riskli_frame is not None:
+        story.append(P(f"En Riskli Kare — REBA {en_yuk}",
+                       bold=True, size=10, color=KOYU, space_after=4))
+        en_riskli_zaman = next(
+            (v['zaman'] for v in video_sonuclari if v['skor'] == en_yuk), 0)
+        story.append(P(f"Zaman: {en_riskli_zaman:.1f}s · {en_riskli_skor.risk_seviyesi}",
+                       size=8, color=colors.HexColor('#64748b'), space_after=4))
+
+        jpg = overlay_to_bytes(en_riskli_frame, quality=88)
+        if jpg:
+            img_buf = io.BytesIO(jpg)
+            img_w = 10*cm
+            oh, ow = en_riskli_frame.shape[:2]
+            img_h = img_w * (oh / ow)
+            max_h = 10*cm
+            if img_h > max_h:
+                img_h = max_h
+                img_w = img_h * (ow / oh)
+            rl_img = RLImage(img_buf, width=img_w, height=img_h)
+            story.append(rl_img)
+            story.append(Spacer(1, 0.3*cm))
+
+    # Frame bazlı skor tablosu
+    story.append(P("Kare Bazlı REBA Skorları", bold=True, size=10, color=KOYU, space_after=4))
+    frame_rows = [["Zaman (s)", "REBA Skoru", "Risk Seviyesi"]]
+    for v in video_sonuclari:
+        frame_rows.append([
+            f"{v['zaman']:.1f}",
+            str(v['skor']),
+            v['risk'],
+        ])
+    tf2 = Table(frame_rows, colWidths=[4*cm, 4*cm, 10*cm])
+    stf2 = ts_base()
+    stf2.add('ALIGN', (0,0), (1,-1), 'CENTER')
+    for i, v in enumerate(video_sonuclari, 1):
+        stf2.add('TEXTCOLOR', (1,i), (1,i), rt(v['skor']))
+        stf2.add('FONTNAME', (1,i), (1,i), FONT_BOLD)
+        stf2.add('BACKGROUND', (0,i), (-1,i), rk(v['skor']))
+    tf2.setStyle(stf2)
+    story.append(tf2)
+
+    # ══════════════════════════════════════
+    # SAYFA 2 — WORKSHEET + SEGMENT + AKSİYON
+    # ══════════════════════════════════════
+
+    story.append(PageBreak())
+    sk = en_riskli_skor
+    ac = sk.acılar
+
+    story.append(P(f"En Riskli Kare — Detaylı REBA Analizi",
+                   bold=True, size=16, color=KOYU, space_after=6))
+    story.append(Spacer(1, 0.1*cm))
+    story.append(P(
+        f"REBA: {sk.final_skor}/15  |  {sk.risk_seviyesi}  |  {sk.aksiyon}",
+        size=8, color=colors.HexColor('#64748b'), space_after=8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=KOYU))
+    story.append(Spacer(1, 0.25*cm))
+
+    # A Grubu
+    if ac:
+        boyun_mod = []
+        if ac.boyun_extension: boyun_mod.append("Extension +1")
+        if ac.boyun_yan_egim > 0: boyun_mod.append("Yana eğme +1")
+        if ac.boyun_donus: boyun_mod.append("Dönüş +1")
+
+        govde_mod = []
+        if ac.govde_extension: govde_mod.append("Extension +1")
+        if ac.govde_yan_egim > 0: govde_mod.append("Yana eğme +1")
+        if ac.govde_donus: govde_mod.append("Dönüş +1")
+
+        ukol_mod = []
+        if ac.omuz_kalkmis: ukol_mod.append("Omuz kalkış +1")
+        if ac.kol_abdukte: ukol_mod.append("Abdüksiyon +1")
+        if ac.kol_destekli: ukol_mod.append("Destekli -1")
+
+        diz_max = max(ac.diz_flexion_sol, ac.diz_flexion_sag)
+        taraf = ac.analiz_tarafi
+
+        story.append(P("A Grubu: Boyun — Gövde — Bacak",
+                       bold=True, size=9, color=KOYU, space_after=3))
+        a_rows = [
+            ["Segment", "Açı", "Skor", "Modifikatör"],
+            ["Boyun", f"{ac.boyun_flexion:.0f}°", str(sk.boyun_skoru),
+             ", ".join(boyun_mod) or "—"],
+            ["Gövde", f"{ac.govde_flexion:.0f}°", str(sk.govde_skoru),
+             ", ".join(govde_mod) or "—"],
+            ["Bacak", f"Diz {diz_max:.0f}°", str(sk.bacak_skoru),
+             "Bilateral" if ac.bilateral_destek else "Tek ayak"],
+            [P("Tablo A", bold=True), "", P(str(sk.tablo_a), bold=True), ""],
+            [P("+ Yük", bold=True), "", f"+{sk.yuk_skoru}", ""],
+            [P("= Skor A", bold=True), "", P(str(sk.skor_a), bold=True), ""],
+        ]
+        ta = Table(a_rows, colWidths=[4*cm, 3*cm, 2.5*cm, 8.5*cm])
+        tsa = ts_base()
+        tsa.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.skor_a))
+        tsa.add('FONTSIZE', (2,-1), (2,-1), 11)
+        tsa.add('BACKGROUND', (0,-1), (-1,-1), ACIK)
+        ta.setStyle(tsa)
+        story.append(ta)
+        story.append(Spacer(1, 0.25*cm))
+
+        story.append(P("B Grubu: Üst Kol — Alt Kol — Bilek",
+                       bold=True, size=9, color=KOYU, space_after=3))
+        b_rows = [
+            ["Segment", "Açı", "Skor", "Modifikatör"],
+            [f"Üst Kol ({taraf})", f"{ac.ust_kol_aci:.0f}°",
+             str(sk.ust_kol_skoru), ", ".join(ukol_mod) or "—"],
+            [f"Alt Kol ({taraf})", f"{ac.alt_kol_aci:.0f}°",
+             str(sk.alt_kol_skoru),
+             "60-100° arası" if sk.alt_kol_skoru==1 else "Aralık dışı"],
+            [f"Bilek ({taraf})", f"{ac.bilek_aci:.0f}°", str(sk.bilek_skoru),
+             "Dönüş +1" if ac.bilek_donus else "—"],
+            [P("Tablo B", bold=True), "", P(str(sk.tablo_b), bold=True), ""],
+            [P("+ Tutma", bold=True), "", f"+{sk.tutma_skoru}", ""],
+            [P("= Skor B", bold=True), "", P(str(sk.skor_b), bold=True), ""],
+        ]
+        tb = Table(b_rows, colWidths=[4*cm, 3*cm, 2.5*cm, 8.5*cm])
+        tsb = ts_base()
+        tsb.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.skor_b))
+        tsb.add('FONTSIZE', (2,-1), (2,-1), 11)
+        tsb.add('BACKGROUND', (0,-1), (-1,-1), ACIK)
+        tb.setStyle(tsb)
+        story.append(tb)
+        story.append(Spacer(1, 0.25*cm))
+
+    # Final skor
+    story.append(P("Final Hesaplama", bold=True, size=9, color=KOYU, space_after=3))
+    final_rows = [
+        ["Adım", "Hesaplama", "Sonuç"],
+        ["Tablo C", f"Skor A({sk.skor_a}) × Skor B({sk.skor_b})", str(sk.skor_c)],
+        ["+ Aktivite", f"+{sk.aktivite_skoru}", ""],
+        [P("NİHAİ REBA", bold=True), "", P(str(sk.final_skor), bold=True)],
+    ]
+    tfin = Table(final_rows, colWidths=[4*cm, 9*cm, 5*cm])
+    stfin = ts_base()
+    stfin.add('FONTSIZE', (2,-1), (2,-1), 14)
+    stfin.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.final_skor))
+    stfin.add('BACKGROUND', (0,-1), (-1,-1), rk(sk.final_skor))
+    tfin.setStyle(stfin)
+    story.append(tfin)
+    story.append(Spacer(1, 0.25*cm))
+
+    # Explainable AI
+    if sk.aciklama:
+        story.append(P("Neden Bu Skor? — Segment Analizi",
+                       bold=True, size=10, color=KOYU, space_after=3))
+        exp_rows = [["Segment", "Açı", "Skor", "Açıklama"]]
+        for item in sk.aciklama:
+            exp_rows.append([
+                str(item.get('segment', '')),
+                str(item.get('aci', '')),
+                str(item.get('temel', '')),
+                str(item.get('aciklama', '')),
+            ])
+        te = Table(exp_rows, colWidths=[4*cm, 3*cm, 2*cm, 9*cm])
+        te.setStyle(ts_base())
+        story.append(te)
+        story.append(Spacer(1, 0.25*cm))
+
+    # Önerilen aksiyonlar
+    if sk.final_skor >= 4:
+        story.append(P("Önerilen Aksiyonlar",
+                       bold=True, size=10, color=KOYU, space_after=3))
+        for aks in _aksiyon_onerisi(sk):
+            story.append(P(f"• {aks}", size=8, space_after=3))
+
+    # Footer
+    story.append(Spacer(1, 0.4*cm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=CIZGI))
+    story.append(P(
+        "REBA Analiz Ajanı v5.2  |  Hignett & McAtamney (2000)  |  "
+        "AI tabanlı açı tahmini ±3-5° doğruluk payı içerir",
+        size=7, color=colors.HexColor('#94a3b8')))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.getvalue()
