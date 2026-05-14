@@ -452,6 +452,16 @@ if calistir and form_tamam:
             </div>
             """, unsafe_allow_html=True)
 
+        # Bacak görünmüyor uyarısı
+        if fs.skor and fs.skor.acılar and not fs.skor.acılar.bacak_gozukuyor:
+            st.markdown(f"""
+            <div class="warn-box">
+            ⚠️ <strong>{fs.dosya_adi}</strong>: Bacak (diz/ayak) görünmüyor.
+            Bacak skoru varsayılan olarak hesaplandı (dik duruş). 
+            Daha doğru analiz için tam vücut fotoğrafı çekin.
+            </div>
+            """, unsafe_allow_html=True)
+
     # ── FOTO DETAYLARI ──
     st.markdown("""
     <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
