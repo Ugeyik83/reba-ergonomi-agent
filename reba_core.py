@@ -230,57 +230,19 @@ def vucut_acilari_hesapla(landmarks, w: int, h: int) -> AcilarObj:
                              v(LM.RIGHT_WRIST), v(LM.RIGHT_HIP)]))
     a.analiz_tarafi = "sol" if sol_vis > sag_vis else "sag"
 
-    # ── BOYUN — #2: Relatif hesaplama ──
-    # Boyun açısı = baş (kulak ortası) ile omuz ortası arası açı - gövde açısı
+    # ── BOYUN — sadece fleksiyon açısı (modifier'lar manuel) ──
     govde_aci_ham = aci_dikey(mid_omuz, mid_kalca)
     boyun_aci_ham = aci_dikey(mid_kulak, mid_omuz)
-    # Relatif boyun fleksiyonu: baş gövdeye göre ne kadar öne eğik
     a.boyun_flexion = abs(boyun_aci_ham)
+    # NOT: boyun_extension, boyun_yan_egim, boyun_donus
+    # → sidebar'dan manuel girilir, burada hesaplanmaz
 
-    # #3: Boyun extension — burun omuzlardan geriye gidiyorsa
-    # Burun y < omuz y (yukarıda) VE burun x omuzların gerisinde
-    burun = p(LM.NOSE)
-    if burun[1] < mid_omuz[1]:  # burun omuzların üstünde (normal)
-        # Baş gövde ekseninin gerisine gidiyorsa → extension
-        # Gövde eğik öne giderken baş arkaya dönüyorsa extension
-        govde_vek = (mid_omuz[0] - mid_kalca[0], mid_omuz[1] - mid_kalca[1])
-        bas_vek = (burun[0] - mid_omuz[0], burun[1] - mid_omuz[1])
-        # Cross product ile yön belirle
-        cross = govde_vek[0] * bas_vek[1] - govde_vek[1] * bas_vek[0]
-        # Negatif açı → extension (gövde yönünün tersi)
-        if boyun_aci_ham < 5 and a.boyun_flexion < 10:
-            a.boyun_extension = True
-
-    # Boyun yan eğim & dönüş
-    ear_dx = abs(p(LM.LEFT_EAR)[0] - p(LM.RIGHT_EAR)[0])
-    ear_dy = abs(p(LM.LEFT_EAR)[1] - p(LM.RIGHT_EAR)[1])
-    if ear_dx > 0:
-        a.boyun_yan_egim = math.degrees(math.atan2(ear_dy, ear_dx))
-    a.boyun_donus = a.boyun_yan_egim > 20
-
-    # ── GÖVDE ──
+    # ── GÖVDE — sadece fleksiyon açısı (modifier'lar manuel) ──
     a.govde_flexion = govde_aci_ham
+    # NOT: govde_extension, govde_yan_egim, govde_donus
+    # → sidebar'dan manuel girilir, burada hesaplanmaz
 
-    # #4: Gövde extension — omuzlar kalçanın gerisine gidiyorsa
-    # 2D'de: omuz x kalça x'in belirgin arkasında → extension
-    # Basit yaklaşım: çok küçük fleksiyon + omuz kalçadan geriye
-    if a.govde_flexion < 5:
-        # Neredeyse dik veya geriye eğik
-        # Omuz mid ile kalça mid arasındaki x farkı kontrol et
-        # Eğer omuzlar geriye gitmişse
-        a.govde_extension = True  # Dik durumda minor extension sayılır
-        # Not: 2D'den extension'ı kesin tespit etmek zor
-
-    # Gövde yan eğim
-    lateral = abs(mid_omuz[0] - mid_kalca[0])
-    yukseklik = abs(mid_omuz[1] - mid_kalca[1])
-    if yukseklik > 0:
-        a.govde_yan_egim = math.degrees(math.atan2(lateral, yukseklik))
     omuz_gen = abs(p(LM.LEFT_SHOULDER)[0] - p(LM.RIGHT_SHOULDER)[0])
-    kalca_gen = abs(p(LM.LEFT_HIP)[0] - p(LM.RIGHT_HIP)[0])
-    if kalca_gen > 0:
-        ratio = omuz_gen / kalca_gen
-        a.govde_donus = ratio < 0.7 or ratio > 1.4
 
     # ── BACAKLAR ──
     # Visibility kontrolü — görünmüyorsa MediaPipe extrapolate eder → hatalı skor
@@ -310,14 +272,8 @@ def vucut_acilari_hesapla(landmarks, w: int, h: int) -> AcilarObj:
         a.ust_kol_aci = a.ust_kol_aci_sag
 
     ref = abs(p(LM.LEFT_HIP)[1] - p(LM.LEFT_SHOULDER)[1])
-    sol_se = abs(p(LM.LEFT_SHOULDER)[1] - p(LM.LEFT_EAR)[1])
-    sag_se = abs(p(LM.RIGHT_SHOULDER)[1] - p(LM.RIGHT_EAR)[1])
-    if ref > 0:
-        a.omuz_kalkmis = min(sol_se, sag_se) / ref < 0.3
-    if omuz_gen > 0:
-        sol_abd = abs(p(LM.LEFT_ELBOW)[0] - p(LM.LEFT_SHOULDER)[0])
-        sag_abd = abs(p(LM.RIGHT_ELBOW)[0] - p(LM.RIGHT_SHOULDER)[0])
-        a.kol_abdukte = max(sol_abd, sag_abd) / omuz_gen > 0.8
+    # NOT: omuz_kalkmis, kol_abdukte, kol_destekli
+    # → sidebar'dan manuel girilir, burada hesaplanmaz
 
     # ── ALT KOL — bilateral seçim ──
     la_sol = aci_3nokta(
@@ -339,9 +295,7 @@ def vucut_acilari_hesapla(landmarks, w: int, h: int) -> AcilarObj:
     else:
         a.bilek_aci = w_sag
 
-    bilek_y = abs(p(LM.LEFT_WRIST)[1] - p(LM.RIGHT_WRIST)[1])
-    if ref > 0:
-        a.bilek_donus = bilek_y / ref > 0.15
+    # NOT: bilek_donus → sidebar'dan manuel girilir, burada hesaplanmaz
 
     return a
 
@@ -355,13 +309,33 @@ def reba_skorla(
     yuk_skoru: int,
     tutma: int,
     aktivite: int,
+    # Manuel modifier'lar — sidebar'dan kullanıcı tarafından girilir
+    boyun_yan_egim: bool = False,
+    boyun_donus: bool = False,
+    boyun_extension: bool = False,
+    govde_yan_egim: bool = False,
+    govde_donus: bool = False,
+    govde_extension: bool = False,
+    omuz_kalkmis: bool = False,
+    kol_abdukte: bool = False,
+    kol_destekli: bool = False,
+    bilek_donus: bool = False,
 ) -> REBASkoru:
     """
     REBA formunu hesapla.
-    #3: Boyun extension → +1
-    #4: Gövde extension → +1
-    #9: Explainable AI — her segment neden bu skoru aldı açıklanır
+    Temel açılar AI'dan, modifier'lar kullanıcıdan gelir.
     """
+    # Manuel modifier'ları AcilarObj'a yaz (overlay ve PDF için referans)
+    a.boyun_yan_egim   = 15.0 if boyun_yan_egim else 0.0  # eşik üstü sayılsın
+    a.boyun_donus      = boyun_donus
+    a.boyun_extension  = boyun_extension
+    a.govde_yan_egim   = 10.0 if govde_yan_egim else 0.0
+    a.govde_donus      = govde_donus
+    a.govde_extension  = govde_extension
+    a.omuz_kalkmis     = omuz_kalkmis
+    a.kol_abdukte      = kol_abdukte
+    a.kol_destekli     = kol_destekli
+    a.bilek_donus      = bilek_donus
     r = REBASkoru()
     r.yuk_skoru = yuk_skoru
     r.tutma_skoru = tutma
