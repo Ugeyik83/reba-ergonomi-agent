@@ -57,6 +57,7 @@ class AcilarObj:
         # Güven
         self.guven: float = 0.0
         self.segment_guven: dict = {}         # segment bazlı güven
+        self.bacak_gozukuyor: bool = True     # diz/ayak landmark görünürlük bayrağı
 
 
 @dataclass
@@ -282,11 +283,20 @@ def vucut_acilari_hesapla(landmarks, w: int, h: int) -> AcilarObj:
         a.govde_donus = ratio < 0.7 or ratio > 1.4
 
     # ── BACAKLAR ──
-    a.diz_flexion_sol = 180 - aci_3nokta(
+    # Visibility kontrolü — görünmüyorsa MediaPipe extrapolate eder → hatalı skor
+    sol_diz_ok = v(LM.LEFT_KNEE) > 0.4 and v(LM.LEFT_ANKLE) > 0.3
+    sag_diz_ok = v(LM.RIGHT_KNEE) > 0.4 and v(LM.RIGHT_ANKLE) > 0.3
+
+    a.diz_flexion_sol = (180 - aci_3nokta(
         p(LM.LEFT_HIP), p(LM.LEFT_KNEE), p(LM.LEFT_ANKLE))
-    a.diz_flexion_sag = 180 - aci_3nokta(
+        ) if sol_diz_ok else 0.0
+
+    a.diz_flexion_sag = (180 - aci_3nokta(
         p(LM.RIGHT_HIP), p(LM.RIGHT_KNEE), p(LM.RIGHT_ANKLE))
+        ) if sag_diz_ok else 0.0
+
     a.bilateral_destek = v(LM.LEFT_ANKLE) > 0.3 and v(LM.RIGHT_ANKLE) > 0.3
+    a.bacak_gozukuyor = sol_diz_ok or sag_diz_ok  # UI/PDF uyarısı için
 
     # ── ÜST KOL — bilateral seçim ──
     a.ust_kol_aci_sol = aci_3nokta(
