@@ -275,9 +275,9 @@ with st.sidebar:
 # ANA ALAN — YÜKLEME
 # ════════════════════════════════════════════════════════
 
-col_yuk, col_param = st.columns([3, 2])
+col_foto, col_video = st.columns(2)
 
-with col_yuk:
+with col_foto:
     st.markdown("""
     <div style="font-size:11px;font-weight:700;color:#475569;
                 text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">
@@ -286,7 +286,7 @@ with col_yuk:
     """, unsafe_allow_html=True)
     st.markdown("""
     <div class="info-box">
-    Bir veya birden fazla fotoğraf yükleyin — her biri için ayrı REBA analizi yapılır.<br>
+    Bir veya birden fazla fotoğraf — her biri için ayrı REBA analizi.<br>
     Desteklenen: <strong>JPG, PNG, WEBP</strong>
     </div>
     """, unsafe_allow_html=True)
@@ -304,44 +304,54 @@ with col_yuk:
         </div>
         """, unsafe_allow_html=True)
 
-with col_param:
+with col_video:
     st.markdown("""
     <div style="font-size:11px;font-weight:700;color:#475569;
                 text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">
-        ℹ️ Aktif Parametreler
+        🎬 Video Yükle
     </div>
     """, unsafe_allow_html=True)
+    st.markdown("""
+    <div class="info-box">
+    Max <strong>30 saniye</strong> — 2 frame/sn örnekleme ile analiz.<br>
+    Desteklenen: <strong>MP4, MOV, WEBM, AVI</strong>
+    </div>
+    """, unsafe_allow_html=True)
+    yuklenen_video = st.file_uploader(
+        "Video",
+        type=["mp4", "mov", "webm", "avi"],
+        accept_multiple_files=False,
+        label_visibility="collapsed",
+    )
+    if yuklenen_video:
+        st.markdown(f"""
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;
+                    padding:8px 12px;font-size:12px;color:#166534;margin-top:6px">
+        ✓ <strong>{yuklenen_video.name}</strong> yüklendi
+        </div>
+        """, unsafe_allow_html=True)
+
+# Parametreler özeti
+with st.expander("ℹ️ Aktif Parametreler", expanded=False):
     st.markdown(f"""
     <table style="width:100%;border-collapse:collapse;font-size:12px">
     <tr style="border-bottom:1px solid #f1f5f9">
         <td style="padding:6px 4px;color:#64748b">Yük</td>
         <td style="padding:6px 4px;font-weight:600">{yuk_kg:.1f} kg → +{yuk_skoru_val}</td>
-    </tr>
-    <tr style="border-bottom:1px solid #f1f5f9">
         <td style="padding:6px 4px;color:#64748b">Tutma</td>
         <td style="padding:6px 4px;font-weight:600">+{tutma_val} — {tutma_label}</td>
     </tr>
-    <tr style="border-bottom:1px solid #f1f5f9">
+    <tr>
         <td style="padding:6px 4px;color:#64748b">Aktivite</td>
-        <td style="padding:6px 4px;font-weight:600">
-            +{aktivite_val}{(' — '+', '.join(akt_aci)) if akt_aci else ''}
-        </td>
-    </tr>
-    <tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:6px 4px;font-weight:600">+{aktivite_val}{(' — '+', '.join(akt_aci)) if akt_aci else ''}</td>
         <td style="padding:6px 4px;color:#64748b">Görsel Mod</td>
         <td style="padding:6px 4px;font-weight:600">{annotation_mode.capitalize()}</td>
-    </tr>
-    <tr>
-        <td style="padding:6px 4px;color:#64748b">Fotoğraf</td>
-        <td style="padding:6px 4px;font-weight:600">
-            {len(yuklenen) if yuklenen else 0} adet
-        </td>
     </tr>
     </table>
     """, unsafe_allow_html=True)
 
 # Analiz butonu
-form_tamam = bool(bolum or is_istasyonu or is_adimi) and bool(yuklenen)
+form_tamam = bool(bolum or is_istasyonu or is_adimi) and bool(yuklenen or yuklenen_video)
 
 st.markdown("---")
 col_btn, col_uyari = st.columns([1, 4])
@@ -354,8 +364,8 @@ with col_uyari:
         eksikler = []
         if not (bolum or is_istasyonu or is_adimi):
             eksikler.append("form bilgisi")
-        if not yuklenen:
-            eksikler.append("fotoğraf")
+        if not (yuklenen or yuklenen_video):
+            eksikler.append("fotoğraf veya video")
         st.markdown(f"""
         <div class="warn-box" style="margin-top:4px">
         ⚠️ Analiz için gerekli: <strong>{' ve '.join(eksikler)}</strong><br>
@@ -670,6 +680,225 @@ if calistir and form_tamam:
                                data=pdf_bytes, file_name=ad,
                                mime="application/pdf",
                                use_container_width=True)
+
+# ════════════════════════════════════════════════════════
+# VİDEO ANALİZİ
+# ════════════════════════════════════════════════════════
+
+if calistir and form_tamam and yuklenen_video:
+    st.markdown("---")
+    st.markdown("""
+    <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
+                letter-spacing:0.1em;margin-bottom:12px">🎬 Video Analizi</div>
+    """, unsafe_allow_html=True)
+
+    import tempfile, os
+    import numpy as np
+
+    # Videoyu temp dosyaya yaz
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
+        tmp.write(yuklenen_video.read())
+        tmp_path = tmp.name
+
+    try:
+        cap = cv2.VideoCapture(tmp_path)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        sure_sn = total_frames / fps
+
+        # 30 sn kontrolü
+        if sure_sn > 30:
+            st.markdown(f"""
+            <div class="warn-box">
+            ⚠️ Video {sure_sn:.0f} sn — maksimum 30 saniye. İlk 30 saniye analiz edilecek.
+            </div>
+            """, unsafe_allow_html=True)
+            sure_sn = 30
+
+        # 2 frame/sn örnekleme
+        FRAME_ARALIK = max(1, int(fps / 2))
+        analiz_edilecek = []
+        f = 0
+        while f < min(total_frames, int(sure_sn * fps)):
+            analiz_edilecek.append(f)
+            f += FRAME_ARALIK
+
+        pb_v = st.progress(0)
+        durum_v = st.empty()
+
+        video_sonuclari = []   # {zaman_sn, skor, frame_img}
+        en_riskli_frame = None
+        en_riskli_skor = 0
+
+        pose = mp.solutions.pose.Pose(
+            static_image_mode=False, model_complexity=1,
+            min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
+        for idx_f, frame_no in enumerate(analiz_edilecek):
+            durum_v.text(f"Video analiz: {idx_f+1}/{len(analiz_edilecek)} kare")
+            pb_v.progress((idx_f + 1) / len(analiz_edilecek))
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+
+            zaman_sn = frame_no / fps
+
+            # Boyut sınırla
+            h_f, w_f = frame.shape[:2]
+            if w_f > 1280:
+                sc = 1280 / w_f
+                frame = cv2.resize(frame, (1280, int(h_f * sc)))
+
+            res = pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            if not res.pose_landmarks:
+                continue
+
+            lms = res.pose_landmarks.landmark
+            h2, w2 = frame.shape[:2]
+            a_obj = vucut_acilari_hesapla(lms, w2, h2)
+            skor = reba_skorla(
+                a_obj, yuk_skoru_val, tutma_val, aktivite_val,
+                boyun_yan_egim=boyun_yan_egim, boyun_donus=boyun_donus,
+                boyun_extension=boyun_extension, govde_yan_egim=govde_yan_egim,
+                govde_donus=govde_donus, govde_extension=govde_extension,
+                omuz_kalkmis=omuz_kalkmis, kol_abdukte=kol_abdukte,
+                kol_destekli=kol_destekli, bilek_donus=bilek_donus,
+            )
+
+            overlay = overlay_ciz(frame.copy(), lms, skor, mode=annotation_mode)
+            video_sonuclari.append({
+                'zaman': zaman_sn,
+                'skor': skor.final_skor,
+                'risk': skor.risk_seviyesi,
+                'skor_obj': skor,
+                'overlay': overlay,
+            })
+
+            if skor.final_skor > en_riskli_skor:
+                en_riskli_skor = skor.final_skor
+                en_riskli_frame = overlay
+
+        pose.close()
+        cap.release()
+        durum_v.empty()
+        pb_v.empty()
+
+    finally:
+        try: os.unlink(tmp_path)
+        except: pass
+
+    if not video_sonuclari:
+        st.markdown("""
+        <div class="error-box">❌ Video analiz edilemedi. Kişi tespit edilemedi.</div>
+        """, unsafe_allow_html=True)
+    else:
+        # Metrikler
+        tum_skorlar = [v['skor'] for v in video_sonuclari]
+        ort_v = sum(tum_skorlar) / len(tum_skorlar)
+        en_yuk_v = max(tum_skorlar)
+        en_dus_v = min(tum_skorlar)
+
+        # %90 persentil
+        sorted_s = sorted(tum_skorlar)
+        p90_idx = int(len(sorted_s) * 0.9)
+        p90_v = sorted_s[min(p90_idx, len(sorted_s)-1)]
+
+        # Risk dağılımı
+        dagilim = {'Önemsiz/Düşük': 0, 'Orta': 0, 'Yüksek': 0, 'Çok Yüksek': 0}
+        for s in tum_skorlar:
+            if s <= 3: dagilim['Önemsiz/Düşük'] += 1
+            elif s <= 7: dagilim['Orta'] += 1
+            elif s <= 10: dagilim['Yüksek'] += 1
+            else: dagilim['Çok Yüksek'] += 1
+
+        ort_r, ort_c = risk_info(round(ort_v))
+        yuk_r, yuk_c = risk_info(en_yuk_v)
+        p90_r, p90_c = risk_info(p90_v)
+
+        st.markdown(f"""
+        <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
+                    letter-spacing:0.1em;margin-bottom:10px">
+            📊 Video Özeti — {len(tum_skorlar)} Kare · {sure_sn:.0f} sn
+        </div>
+        <div class="metric-row">
+            <div class="metric-box">
+                <div class="val" style="color:{ort_c}">{ort_v:.1f}</div>
+                <div class="lbl">Ortalama REBA</div>
+                <span class="risk-badge" style="background:{ort_c}18;color:{ort_c};border:1px solid {ort_c}40">{ort_r}</span>
+            </div>
+            <div class="metric-box">
+                <div class="val" style="color:{p90_c}">{p90_v}</div>
+                <div class="lbl">%90 Persentil</div>
+                <span class="risk-badge" style="background:{p90_c}18;color:{p90_c};border:1px solid {p90_c}40">{p90_r}</span>
+            </div>
+            <div class="metric-box">
+                <div class="val" style="color:{yuk_c}">{en_yuk_v}</div>
+                <div class="lbl">En Yüksek</div>
+                <span class="risk-badge" style="background:{yuk_c}18;color:{yuk_c};border:1px solid {yuk_c}40">{yuk_r}</span>
+            </div>
+            <div class="metric-box">
+                <div class="val" style="color:#0f172a">{en_dus_v}</div>
+                <div class="lbl">En Düşük</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Risk dağılımı
+        toplam_kare = len(tum_skorlar)
+        dag_html = ""
+        renk_map = {
+            'Önemsiz/Düşük': '#16a34a', 'Orta': '#d97706',
+            'Yüksek': '#dc2626', 'Çok Yüksek': '#7c3aed'
+        }
+        for seviye, sayi in dagilim.items():
+            if sayi > 0:
+                pct = sayi / toplam_kare * 100
+                rc = renk_map[seviye]
+                dag_html += f"""
+                <div style="margin-bottom:6px">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+                        <span style="color:{rc};font-weight:600">{seviye}</span>
+                        <span style="color:#64748b">{sayi} kare ({pct:.0f}%)</span>
+                    </div>
+                    <div style="background:#f1f5f9;border-radius:3px;height:6px">
+                        <div style="width:{pct:.0f}%;background:{rc};height:100%;border-radius:3px"></div>
+                    </div>
+                </div>"""
+
+        st.markdown(f"""
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;
+                    padding:14px;margin-bottom:16px">
+            <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:10px">
+                Risk Dağılımı
+            </div>
+            {dag_html}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Zaman çizelgesi
+        st.markdown("**Zaman Çizelgesi — Frame Bazlı REBA Skoru**")
+        zaman_labels = [f"{v['zaman']:.1f}s" for v in video_sonuclari]
+        skor_values = [v['skor'] for v in video_sonuclari]
+
+        chart_data = {"Zaman": zaman_labels, "REBA": skor_values}
+        import pandas as pd
+        df = pd.DataFrame(chart_data)
+        st.line_chart(df.set_index("Zaman"))
+
+        # En riskli kare
+        if en_riskli_frame is not None:
+            st.markdown("**En Riskli Kare**")
+            en_riskli_zaman = next(
+                v['zaman'] for v in video_sonuclari if v['skor'] == en_riskli_skor)
+            st.markdown(f"""
+            <div style="font-size:12px;color:#64748b;margin-bottom:6px">
+                Zaman: {en_riskli_zaman:.1f}s · REBA: {en_riskli_skor}
+            </div>
+            """, unsafe_allow_html=True)
+            rgb_frame = cv2.cvtColor(en_riskli_frame, cv2.COLOR_BGR2RGB)
+            st.image(rgb_frame, width=500)
 
 # ════════════════════════════════════════════════════════
 # FOOTER
