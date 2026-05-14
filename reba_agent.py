@@ -215,7 +215,43 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
 
-    # #6: Annotation mode
+    st.markdown("### 🔄 Postür Modifier'ları")
+    st.markdown("""
+    <div style="font-size:10px;color:#64748b;margin-bottom:8px">
+    AI açıları hesaplar, modifier'ları siz belirleyin.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("**Boyun**")
+    boyun_yan_egim  = st.checkbox("Yana eğilme (+1)", key="b_ye")
+    boyun_donus     = st.checkbox("Dönüş (+1)", key="b_d")
+    boyun_extension = st.checkbox("Geriye eğilme / Extension (+1)", key="b_ext")
+
+    st.markdown("**Gövde**")
+    govde_yan_egim  = st.checkbox("Yana eğilme (+1)", key="g_ye")
+    govde_donus     = st.checkbox("Dönüş (+1)", key="g_d")
+    govde_extension = st.checkbox("Geriye eğilme / Extension (+1)", key="g_ext")
+
+    st.markdown("**Üst Kol**")
+    omuz_kalkmis = st.checkbox("Omuz kalkış (+1)", key="uk_ok")
+    kol_abdukte  = st.checkbox("Abdüksiyon — dışa açılma (+1)", key="uk_ab")
+    kol_destekli = st.checkbox("Kol destekli / yaslı (-1)", key="uk_des")
+
+    st.markdown("**Bilek**")
+    bilek_donus = st.checkbox("Dönüş / yana bükülme (+1)", key="bi_d")
+
+    # Modifier özeti
+    toplam_mod = (int(boyun_yan_egim) + int(boyun_donus) + int(boyun_extension) +
+                  int(govde_yan_egim) + int(govde_donus) + int(govde_extension) +
+                  int(omuz_kalkmis) + int(kol_abdukte) + int(bilek_donus) - int(kol_destekli))
+    if toplam_mod != 0:
+        st.markdown(f"""
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;
+                    padding:8px 12px;font-size:12px;margin-top:4px">
+            Aktif modifier: <strong>{toplam_mod:+d}</strong>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("### 🎨 Görsel Mod")
     annotation_mode = st.selectbox(
         "Annotation",
@@ -367,7 +403,19 @@ if calistir and form_tamam:
                     lms = res.pose_landmarks.landmark
                     h2, w2 = img.shape[:2]
                     a_obj = vucut_acilari_hesapla(lms, w2, h2)
-                    skor  = reba_skorla(a_obj, yuk_skoru_val, tutma_val, aktivite_val)
+                    skor  = reba_skorla(
+                        a_obj, yuk_skoru_val, tutma_val, aktivite_val,
+                        boyun_yan_egim=boyun_yan_egim,
+                        boyun_donus=boyun_donus,
+                        boyun_extension=boyun_extension,
+                        govde_yan_egim=govde_yan_egim,
+                        govde_donus=govde_donus,
+                        govde_extension=govde_extension,
+                        omuz_kalkmis=omuz_kalkmis,
+                        kol_abdukte=kol_abdukte,
+                        kol_destekli=kol_destekli,
+                        bilek_donus=bilek_donus,
+                    )
                     fs.skor = skor
                     fs.overlay_img = overlay_ciz(img.copy(), lms, skor, mode=annotation_mode)
         except Exception as e:
