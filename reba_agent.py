@@ -374,10 +374,10 @@ with col_uyari:
         """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════
-# ANALİZ
+# FOTOĞRAF ANALİZİ
 # ════════════════════════════════════════════════════════
 
-if calistir and form_tamam:
+if calistir and form_tamam and yuklenen:
     st.markdown("---")
     pb    = st.progress(0)
     durum = st.empty()
@@ -446,240 +446,241 @@ if calistir and form_tamam:
         Fotoğrafların tam vücut, net ve iyi aydınlatılmış olduğundan emin olun.
         </div>
         """, unsafe_allow_html=True)
-        st.stop()
 
-    # ── ÖZET METRİKLER ──
-    skorlar = [s.skor.final_skor for s in gecerli]
-    ort     = sum(skorlar) / len(skorlar)
-    en_yuk  = max(skorlar)
-    en_dus  = min(skorlar)
+    if gecerli:
 
-    ort_r, ort_c = risk_info(round(ort))
-    yuk_r, yuk_c = risk_info(en_yuk)
+        # ── ÖZET METRİKLER ──
+        skorlar = [s.skor.final_skor for s in gecerli]
+        ort     = sum(skorlar) / len(skorlar)
+        en_yuk  = max(skorlar)
+        en_dus  = min(skorlar)
 
-    st.markdown(f"""
-    <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
-                letter-spacing:0.1em;margin-bottom:10px">
-        📊 Genel Özet — {len(gecerli)} Fotoğraf
-    </div>
-    <div class="metric-row">
-        <div class="metric-box">
-            <div class="val" style="color:{ort_c}">{ort:.1f}</div>
-            <div class="lbl">Ortalama REBA</div>
-            <span class="risk-badge"
-                  style="background:{ort_c}18;color:{ort_c};border:1px solid {ort_c}40">
-                {ort_r}
-            </span>
-        </div>
-        <div class="metric-box">
-            <div class="val" style="color:{yuk_c}">{en_yuk}</div>
-            <div class="lbl">En Yüksek REBA</div>
-            <span class="risk-badge"
-                  style="background:{yuk_c}18;color:{yuk_c};border:1px solid {yuk_c}40">
-                {yuk_r}
-            </span>
-        </div>
-        <div class="metric-box">
-            <div class="val" style="color:#475569">{en_dus}</div>
-            <div class="lbl">En Düşük REBA</div>
-        </div>
-        <div class="metric-box">
-            <div class="val" style="color:#0f172a">{len(gecerli)}</div>
-            <div class="lbl">Analiz Edilen</div>
-            {f'<div style="font-size:10px;color:#dc2626;margin-top:2px">{len(foto_sonuclari)-len(gecerli)} başarısız</div>'
-             if len(foto_sonuclari) > len(gecerli) else ''}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Başarısız + düşük güven uyarıları
-    for fs in foto_sonuclari:
-        if fs.hata:
-            st.markdown(f"""
-            <div class="warn-box">⚠️ <strong>{fs.dosya_adi}</strong>: {fs.hata}</div>
-            """, unsafe_allow_html=True)
-
-    # #5: Düşük güven uyarısı
-    for fs in gecerli:
-        if fs.skor and fs.skor.acılar and fs.skor.acılar.guven < 0.5:
-            st.markdown(f"""
-            <div class="warn-box">
-            ⚠️ <strong>{fs.dosya_adi}</strong>: AI güven skoru düşük ({fs.skor.acılar.guven:.0%}).
-            Bazı eklemler net görünmüyor — sonuç güvenilirliği sınırlı olabilir.
-            Fotoğrafı farklı açıdan tekrar çekmeyi deneyin.
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Bacak görünmüyor uyarısı
-        if fs.skor and fs.skor.acılar and not fs.skor.acılar.bacak_gozukuyor:
-            st.markdown(f"""
-            <div class="warn-box">
-            ⚠️ <strong>{fs.dosya_adi}</strong>: Bacak (diz/ayak) görünmüyor.
-            Bacak skoru varsayılan olarak hesaplandı (dik duruş). 
-            Daha doğru analiz için tam vücut fotoğrafı çekin.
-            </div>
-            """, unsafe_allow_html=True)
-
-    # ── FOTO DETAYLARI ──
-    st.markdown("""
-    <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
-                letter-spacing:0.1em;margin:14px 0 10px">
-        🔍 Fotoğraf Bazlı Analiz
-    </div>
-    """, unsafe_allow_html=True)
-
-    for fs in gecerli:
-        s = fs.skor
-        a = s.acılar
-        _, renk = risk_info(s.final_skor)
+        ort_r, ort_c = risk_info(round(ort))
+        yuk_r, yuk_c = risk_info(en_yuk)
 
         st.markdown(f"""
-        <div class="foto-header" style="background:{renk}">
-            <span>📷 Fotoğraf {fs.idx} · {fs.dosya_adi}
-                  {f' · Taraf: {a.analiz_tarafi}' if a else ''}</span>
-            <span>REBA {s.final_skor}/15 · {s.risk_seviyesi}</span>
+        <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
+                    letter-spacing:0.1em;margin-bottom:10px">
+            📊 Genel Özet — {len(gecerli)} Fotoğraf
+        </div>
+        <div class="metric-row">
+            <div class="metric-box">
+                <div class="val" style="color:{ort_c}">{ort:.1f}</div>
+                <div class="lbl">Ortalama REBA</div>
+                <span class="risk-badge"
+                      style="background:{ort_c}18;color:{ort_c};border:1px solid {ort_c}40">
+                    {ort_r}
+                </span>
+            </div>
+            <div class="metric-box">
+                <div class="val" style="color:{yuk_c}">{en_yuk}</div>
+                <div class="lbl">En Yüksek REBA</div>
+                <span class="risk-badge"
+                      style="background:{yuk_c}18;color:{yuk_c};border:1px solid {yuk_c}40">
+                    {yuk_r}
+                </span>
+            </div>
+            <div class="metric-box">
+                <div class="val" style="color:#475569">{en_dus}</div>
+                <div class="lbl">En Düşük REBA</div>
+            </div>
+            <div class="metric-box">
+                <div class="val" style="color:#0f172a">{len(gecerli)}</div>
+                <div class="lbl">Analiz Edilen</div>
+                {f'<div style="font-size:10px;color:#dc2626;margin-top:2px">{len(foto_sonuclari)-len(gecerli)} başarısız</div>'
+                 if len(foto_sonuclari) > len(gecerli) else ''}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-        col_img, col_analiz = st.columns([2, 3])
-
-        with col_img:
-            if fs.overlay_img is not None:
-                rgb = cv2.cvtColor(fs.overlay_img, cv2.COLOR_BGR2RGB)
-                st.image(rgb, use_container_width=True)
-
-        with col_analiz:
-            st.markdown("**Segment Skorları**")
-
-            segs = [
-                ("Boyun", s.boyun_skoru, 6,
-                 f"{a.boyun_flexion:.0f}°"
-                 + ("+Ext" if a.boyun_extension else "")
-                 + ("+YanEğ" if a.boyun_yan_egim > 15 else "")
-                 + ("+Dön" if a.boyun_donus else "")),
-                ("Gövde", s.govde_skoru, 5,
-                 f"{a.govde_flexion:.0f}°"
-                 + ("+Ext" if a.govde_extension else "")
-                 + ("+YanEğ" if a.govde_yan_egim > 10 else "")
-                 + ("+Dön" if a.govde_donus else "")),
-                ("Bacak/Diz", s.bacak_skoru, 4,
-                 f"Diz {max(a.diz_flexion_sol, a.diz_flexion_sag):.0f}°"),
-                (f"Üst Kol ({a.analiz_tarafi})", s.ust_kol_skoru, 6,
-                 f"{a.ust_kol_aci:.0f}°"
-                 + ("+OmKalK" if a.omuz_kalkmis else "")
-                 + ("+Abd" if a.kol_abdukte else "")),
-                (f"Alt Kol ({a.analiz_tarafi})", s.alt_kol_skoru, 2,
-                 f"{a.alt_kol_aci:.0f}°"),
-                (f"Bilek ({a.analiz_tarafi})", s.bilek_skoru, 3,
-                 f"{a.bilek_aci:.0f}°" + ("+Dön" if a.bilek_donus else "")),
-            ]
-
-            for seg_ad, seg_val, seg_max, seg_aci in segs:
-                seg_renk = segment_risk_renk(seg_val, seg_max)
-                pct = seg_val / seg_max
+        # Başarısız + düşük güven uyarıları
+        for fs in foto_sonuclari:
+            if fs.hata:
                 st.markdown(f"""
-                <div class="seg-bar-wrap">
-                    <div class="seg-bar-label">
-                        <span>{seg_ad}
-                            <span style="color:#94a3b8;font-size:11px">&nbsp;{seg_aci}</span>
-                        </span>
-                        <span style="font-weight:700;color:{seg_renk};
-                                     font-family:'IBM Plex Mono',monospace">
-                            {seg_val}/{seg_max}
-                        </span>
-                    </div>
-                    <div class="seg-bar-track">
-                        <div class="seg-bar-fill"
-                             style="width:{pct*100:.0f}%;background:{seg_renk}"></div>
-                    </div>
+                <div class="warn-box">⚠️ <strong>{fs.dosya_adi}</strong>: {fs.hata}</div>
+                """, unsafe_allow_html=True)
+
+        # #5: Düşük güven uyarısı
+        for fs in gecerli:
+            if fs.skor and fs.skor.acılar and fs.skor.acılar.guven < 0.5:
+                st.markdown(f"""
+                <div class="warn-box">
+                ⚠️ <strong>{fs.dosya_adi}</strong>: AI güven skoru düşük ({fs.skor.acılar.guven:.0%}).
+                Bazı eklemler net görünmüyor — sonuç güvenilirliği sınırlı olabilir.
+                Fotoğrafı farklı açıdan tekrar çekmeyi deneyin.
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Skor hesaplama
+            # Bacak görünmüyor uyarısı
+            if fs.skor and fs.skor.acılar and not fs.skor.acılar.bacak_gozukuyor:
+                st.markdown(f"""
+                <div class="warn-box">
+                ⚠️ <strong>{fs.dosya_adi}</strong>: Bacak (diz/ayak) görünmüyor.
+                Bacak skoru varsayılan olarak hesaplandı (dik duruş). 
+                Daha doğru analiz için tam vücut fotoğrafı çekin.
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ── FOTO DETAYLARI ──
+        st.markdown("""
+        <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
+                    letter-spacing:0.1em;margin:14px 0 10px">
+            🔍 Fotoğraf Bazlı Analiz
+        </div>
+        """, unsafe_allow_html=True)
+
+        for fs in gecerli:
+            s = fs.skor
+            a = s.acılar
+            _, renk = risk_info(s.final_skor)
+
             st.markdown(f"""
-            <div class="skor-ozet">
-                <div style="display:flex;gap:14px;flex-wrap:wrap;color:#374151">
-                    <span>Tablo A: <strong>{s.tablo_a}</strong>
-                          + Yük <strong>+{s.yuk_skoru}</strong>
-                          = Skor A: <strong style="color:#1d4ed8">{s.skor_a}</strong></span>
-                    <span>Tablo B: <strong>{s.tablo_b}</strong>
-                          + Tutma <strong>+{s.tutma_skoru}</strong>
-                          = Skor B: <strong style="color:#1d4ed8">{s.skor_b}</strong></span>
-                </div>
-                <div style="margin-top:7px;border-top:1px solid #e2e8f0;padding-top:7px">
-                    Tablo C: <strong>{s.skor_c}</strong>
-                    + Aktivite: <strong>+{s.aktivite_skoru}</strong>
-                    &nbsp;=&nbsp;
-                    <strong style="font-size:15px;color:{renk}">REBA {s.final_skor}</strong>
-                    &nbsp;
-                    <span style="color:{renk};font-weight:600">{s.risk_seviyesi}</span>
-                    <br>
-                    <span style="color:#64748b;font-size:11px">
-                        → {s.aksiyon} · AI Güven: {a.guven:.0%}
-                    </span>
-                </div>
+            <div class="foto-header" style="background:{renk}">
+                <span>📷 Fotoğraf {fs.idx} · {fs.dosya_adi}
+                      {f' · Taraf: {a.analiz_tarafi}' if a else ''}</span>
+                <span>REBA {s.final_skor}/15 · {s.risk_seviyesi}</span>
             </div>
             """, unsafe_allow_html=True)
 
-            # #9: Explainable AI — UI'da
-            if s.aciklama and s.final_skor >= 4:
-                rows_html = ""
-                for item in s.aciklama:
-                    rows_html += f"""
-                    <tr>
-                        <td>{item.get('segment','')}</td>
-                        <td>{item.get('aci','')}</td>
-                        <td><strong>{item.get('temel','')}</strong></td>
-                        <td>{item.get('aciklama','')}</td>
-                    </tr>"""
+            col_img, col_analiz = st.columns([2, 3])
+
+            with col_img:
+                if fs.overlay_img is not None:
+                    rgb = cv2.cvtColor(fs.overlay_img, cv2.COLOR_BGR2RGB)
+                    st.image(rgb, use_container_width=True)
+
+            with col_analiz:
+                st.markdown("**Segment Skorları**")
+
+                segs = [
+                    ("Boyun", s.boyun_skoru, 6,
+                     f"{a.boyun_flexion:.0f}°"
+                     + ("+Ext" if a.boyun_extension else "")
+                     + ("+YanEğ" if a.boyun_yan_egim > 15 else "")
+                     + ("+Dön" if a.boyun_donus else "")),
+                    ("Gövde", s.govde_skoru, 5,
+                     f"{a.govde_flexion:.0f}°"
+                     + ("+Ext" if a.govde_extension else "")
+                     + ("+YanEğ" if a.govde_yan_egim > 10 else "")
+                     + ("+Dön" if a.govde_donus else "")),
+                    ("Bacak/Diz", s.bacak_skoru, 4,
+                     f"Diz {max(a.diz_flexion_sol, a.diz_flexion_sag):.0f}°"),
+                    (f"Üst Kol ({a.analiz_tarafi})", s.ust_kol_skoru, 6,
+                     f"{a.ust_kol_aci:.0f}°"
+                     + ("+OmKalK" if a.omuz_kalkmis else "")
+                     + ("+Abd" if a.kol_abdukte else "")),
+                    (f"Alt Kol ({a.analiz_tarafi})", s.alt_kol_skoru, 2,
+                     f"{a.alt_kol_aci:.0f}°"),
+                    (f"Bilek ({a.analiz_tarafi})", s.bilek_skoru, 3,
+                     f"{a.bilek_aci:.0f}°" + ("+Dön" if a.bilek_donus else "")),
+                ]
+
+                for seg_ad, seg_val, seg_max, seg_aci in segs:
+                    seg_renk = segment_risk_renk(seg_val, seg_max)
+                    pct = seg_val / seg_max
+                    st.markdown(f"""
+                    <div class="seg-bar-wrap">
+                        <div class="seg-bar-label">
+                            <span>{seg_ad}
+                                <span style="color:#94a3b8;font-size:11px">&nbsp;{seg_aci}</span>
+                            </span>
+                            <span style="font-weight:700;color:{seg_renk};
+                                         font-family:'IBM Plex Mono',monospace">
+                                {seg_val}/{seg_max}
+                            </span>
+                        </div>
+                        <div class="seg-bar-track">
+                            <div class="seg-bar-fill"
+                                 style="width:{pct*100:.0f}%;background:{seg_renk}"></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Skor hesaplama
                 st.markdown(f"""
-                <details style="margin-top:8px">
-                    <summary style="font-size:12px;font-weight:600;color:#1e3a5f;cursor:pointer">
-                        🔎 Neden Bu Skor?
-                    </summary>
-                    <table class="explain-table">
-                        <tr><th>Segment</th><th>Açı</th><th>Skor</th><th>Açıklama</th></tr>
-                        {rows_html}
-                    </table>
-                </details>
+                <div class="skor-ozet">
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;color:#374151">
+                        <span>Tablo A: <strong>{s.tablo_a}</strong>
+                              + Yük <strong>+{s.yuk_skoru}</strong>
+                              = Skor A: <strong style="color:#1d4ed8">{s.skor_a}</strong></span>
+                        <span>Tablo B: <strong>{s.tablo_b}</strong>
+                              + Tutma <strong>+{s.tutma_skoru}</strong>
+                              = Skor B: <strong style="color:#1d4ed8">{s.skor_b}</strong></span>
+                    </div>
+                    <div style="margin-top:7px;border-top:1px solid #e2e8f0;padding-top:7px">
+                        Tablo C: <strong>{s.skor_c}</strong>
+                        + Aktivite: <strong>+{s.aktivite_skoru}</strong>
+                        &nbsp;=&nbsp;
+                        <strong style="font-size:15px;color:{renk}">REBA {s.final_skor}</strong>
+                        &nbsp;
+                        <span style="color:{renk};font-weight:600">{s.risk_seviyesi}</span>
+                        <br>
+                        <span style="color:#64748b;font-size:11px">
+                            → {s.aksiyon} · AI Güven: {a.guven:.0%}
+                        </span>
+                    </div>
+                </div>
                 """, unsafe_allow_html=True)
 
-        st.markdown(
-            '<div style="border-bottom:1px solid #e2e8f0;margin:8px 0 18px"></div>',
-            unsafe_allow_html=True)
+                # #9: Explainable AI — UI'da
+                if s.aciklama and s.final_skor >= 4:
+                    rows_html = ""
+                    for item in s.aciklama:
+                        rows_html += f"""
+                        <tr>
+                            <td>{item.get('segment','')}</td>
+                            <td>{item.get('aci','')}</td>
+                            <td><strong>{item.get('temel','')}</strong></td>
+                            <td>{item.get('aciklama','')}</td>
+                        </tr>"""
+                    st.markdown(f"""
+                    <details style="margin-top:8px">
+                        <summary style="font-size:12px;font-weight:600;color:#1e3a5f;cursor:pointer">
+                            🔎 Neden Bu Skor?
+                        </summary>
+                        <table class="explain-table">
+                            <tr><th>Segment</th><th>Açı</th><th>Skor</th><th>Açıklama</th></tr>
+                            {rows_html}
+                        </table>
+                    </details>
+                    """, unsafe_allow_html=True)
 
-    # ── PDF ──
-    st.markdown("---")
-    st.markdown("""
-    <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
-                letter-spacing:0.1em;margin-bottom:10px">📄 Rapor İndir</div>
-    """, unsafe_allow_html=True)
+            st.markdown(
+                '<div style="border-bottom:1px solid #e2e8f0;margin:8px 0 18px"></div>',
+                unsafe_allow_html=True)
 
-    akt_aciklama_str = ', '.join(akt_aci) if akt_aci else "Yok"
-    form_bilgi = {
-        'bolum': bolum, 'is_istasyonu': is_istasyonu,
-        'is_adimi': is_adimi, 'analist': analist, 'tarih': str(tarih),
-        'yuk_kg': yuk_kg, 'shock': shock, 'yuk_skoru': yuk_skoru_val,
-        'yuk_aciklama': yuk_aci + (" + Ani kuvvet +1" if shock else ""),
-        'tutma': tutma_val, 'tutma_label': tutma_label,
-        'aktivite': aktivite_val, 'aktivite_aciklama': akt_aciklama_str,
-    }
+        # ── PDF ──
+        st.markdown("---")
+        st.markdown("""
+        <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
+                    letter-spacing:0.1em;margin-bottom:10px">📄 Rapor İndir</div>
+        """, unsafe_allow_html=True)
 
-    col_p, col_b = st.columns([1, 3])
-    with col_p:
-        with st.spinner("PDF hazırlanıyor..."):
-            try:
-                pdf_bytes = pdf_olustur(form_bilgi, foto_sonuclari)
-            except Exception as e:
-                pdf_bytes = b""
-                st.error(f"PDF hatası: {e}")
+        akt_aciklama_str = ', '.join(akt_aci) if akt_aci else "Yok"
+        form_bilgi = {
+            'bolum': bolum, 'is_istasyonu': is_istasyonu,
+            'is_adimi': is_adimi, 'analist': analist, 'tarih': str(tarih),
+            'yuk_kg': yuk_kg, 'shock': shock, 'yuk_skoru': yuk_skoru_val,
+            'yuk_aciklama': yuk_aci + (" + Ani kuvvet +1" if shock else ""),
+            'tutma': tutma_val, 'tutma_label': tutma_label,
+            'aktivite': aktivite_val, 'aktivite_aciklama': akt_aciklama_str,
+        }
 
-        if pdf_bytes:
-            ad = f"REBA_{(bolum or is_istasyonu or 'analiz').replace(' ','_')}_{tarih}.pdf"
-            st.download_button("⬇️  PDF Raporu İndir",
-                               data=pdf_bytes, file_name=ad,
-                               mime="application/pdf",
-                               use_container_width=True)
+        col_p, col_b = st.columns([1, 3])
+        with col_p:
+            with st.spinner("PDF hazırlanıyor..."):
+                try:
+                    pdf_bytes = pdf_olustur(form_bilgi, foto_sonuclari)
+                except Exception as e:
+                    pdf_bytes = b""
+                    st.error(f"PDF hatası: {e}")
+
+            if pdf_bytes:
+                ad = f"REBA_{(bolum or is_istasyonu or 'analiz').replace(' ','_')}_{tarih}.pdf"
+                st.download_button("⬇️  PDF Raporu İndir",
+                                   data=pdf_bytes, file_name=ad,
+                                   mime="application/pdf",
+                                   use_container_width=True)
 
 # ════════════════════════════════════════════════════════
 # VİDEO ANALİZİ
