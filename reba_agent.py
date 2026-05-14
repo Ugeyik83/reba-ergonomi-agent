@@ -18,7 +18,7 @@ from reba_core import (
     vucut_acilari_hesapla, reba_skorla, risk_info,
     segment_risk_renk, SEGMENT_MAX,
 )
-from reba_visual import overlay_ciz, pdf_olustur, ANNOTATION_MODES
+from reba_visual import overlay_ciz, pdf_olustur, video_pdf_olustur, ANNOTATION_MODES
 
 # ════════════════════════════════════════════════════════
 # SAYFA YAPILANDIRMASI
@@ -900,6 +900,45 @@ if calistir and form_tamam and yuklenen_video:
             """, unsafe_allow_html=True)
             rgb_frame = cv2.cvtColor(en_riskli_frame, cv2.COLOR_BGR2RGB)
             st.image(rgb_frame, width=500)
+
+        # Video PDF
+        st.markdown("---")
+        st.markdown("""
+        <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;
+                    letter-spacing:0.1em;margin-bottom:10px">📄 Video Raporu İndir</div>
+        """, unsafe_allow_html=True)
+
+        # En riskli frame'in skor objesini bul
+        en_riskli_skor_obj = next(
+            (v['skor_obj'] for v in video_sonuclari if v['skor'] == en_riskli_skor),
+            None)
+
+        akt_aciklama_str = ', '.join(akt_aci) if akt_aci else "Yok"
+        form_bilgi_v = {
+            'bolum': bolum, 'is_istasyonu': is_istasyonu,
+            'is_adimi': is_adimi, 'analist': analist, 'tarih': str(tarih),
+            'yuk_kg': yuk_kg, 'yuk_skoru': yuk_skoru_val,
+            'yuk_aciklama': yuk_aci,
+            'tutma': tutma_val, 'tutma_label': tutma_label,
+            'aktivite': aktivite_val, 'aktivite_aciklama': akt_aciklama_str,
+        }
+
+        col_vp, col_vb = st.columns([1, 3])
+        with col_vp:
+            with st.spinner("PDF hazırlanıyor..."):
+                try:
+                    vpdf = video_pdf_olustur(
+                        form_bilgi_v, video_sonuclari,
+                        en_riskli_frame, en_riskli_skor_obj, sure_sn)
+                except Exception as e:
+                    vpdf = b""
+                    st.error(f"Video PDF hatası: {e}")
+            if vpdf:
+                vad = f"REBA_Video_{(bolum or is_istasyonu or 'analiz').replace(' ','_')}_{tarih}.pdf"
+                st.download_button("⬇️  Video PDF Raporu",
+                                   data=vpdf, file_name=vad,
+                                   mime="application/pdf",
+                                   use_container_width=True)
 
 # ════════════════════════════════════════════════════════
 # FOOTER
