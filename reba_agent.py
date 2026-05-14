@@ -868,15 +868,15 @@ if calistir and form_tamam and yuklenen_video:
                     </div>
                 </div>"""
 
-        st.markdown(f"""
+        st.markdown("""
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;
-                    padding:14px;margin-bottom:16px">
+                    padding:14px;margin-bottom:4px">
             <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:10px">
                 Risk Dağılımı
             </div>
-            {dag_html}
-        </div>
         """, unsafe_allow_html=True)
+        st.markdown(dag_html, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # Zaman çizelgesi
         st.markdown("**Zaman Çizelgesi — Frame Bazlı REBA Skoru**")
