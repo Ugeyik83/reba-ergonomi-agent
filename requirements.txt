@@ -1,7 +1,0 @@
-streamlit>=1.30.0
-numpy>=1.24.0,<2.0.0
-Pillow>=10.0.0
-opencv-contrib-python-headless==4.10.0.84
-opencv-python-headless==4.10.0.84
-mediapipe==0.10.21
-reportlab>=4.0.0
