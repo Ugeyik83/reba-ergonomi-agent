@@ -688,6 +688,82 @@ if calistir and form_tamam and yuklenen:
             'aktivite': aktivite_val, 'aktivite_aciklama': akt_aciklama_str,
         }
 
+        # ── AI Önerileri (UI) ──────────────────────────────
+        github_token = st.secrets.get("GITHUB_TOKEN")
+        if github_token:
+            en_yuk_fs = max(gecerli, key=lambda x: x.skor.final_skor)
+            en_yuk_sk = en_yuk_fs.skor
+
+            if en_yuk_sk.final_skor >= 4:
+                st.markdown("---")
+                st.markdown("""
+                <div style="font-size:11px;font-weight:700;color:#475569;
+                            text-transform:uppercase;letter-spacing:0.1em;
+                            margin-bottom:10px">🤖 AI Destekli ISG Önerileri</div>
+                """, unsafe_allow_html=True)
+
+                with st.spinner("AI önerileri hazırlanıyor..."):
+                    try:
+                        from github_advisor import get_ai_oneriler
+                        ai_sonuc = get_ai_oneriler(
+                            en_yuk_sk, github_token,
+                            form_bilgi=form_bilgi,
+                            overlay_img=en_yuk_fs.overlay_img,
+                        )
+
+                        st.markdown(f"""
+                        <div class="info-box">
+                            <strong>Değerlendirme:</strong> {ai_sonuc.get('risk_ozeti', '')}
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        mudahaleler = ai_sonuc.get('oncelikli_mudahaleler', [])
+                        if mudahaleler:
+                            sure_renk = {"hemen": "#dc2626", "1 hafta": "#d97706", "1 ay": "#16a34a"}
+                            satirlar = ""
+                            for m in mudahaleler:
+                                sure = m.get("sure", "")
+                                maliyet = m.get("maliyet", "")
+                                sc = sure_renk.get(sure, "#475569")
+                                satirlar += (
+                                    f"<tr>"
+                                    f"<td style='padding:6px 8px'>{m.get('mudahale','')}</td>"
+                                    f"<td style='padding:6px 8px;text-align:center'>"
+                                    f"<span style='color:{sc};font-weight:600'>{sure}</span></td>"
+                                    f"<td style='padding:6px 8px;text-align:center;color:#64748b'>{maliyet}</td>"
+                                    f"</tr>"
+                                )
+                            st.markdown(
+                                "<table style='width:100%;border-collapse:collapse;font-size:12px;margin-top:6px'>"
+                                "<thead><tr style='background:#f8fafc;border-bottom:2px solid #e2e8f0'>"
+                                "<th style='padding:6px 8px;text-align:left;color:#475569;font-size:10px;text-transform:uppercase'>Müdahale</th>"
+                                "<th style='padding:6px 8px;color:#475569;font-size:10px;text-transform:uppercase'>Süre</th>"
+                                "<th style='padding:6px 8px;color:#475569;font-size:10px;text-transform:uppercase'>Maliyet</th>"
+                                f"</tr></thead><tbody>{satirlar}</tbody></table>",
+                                unsafe_allow_html=True
+                            )
+
+                        uzun = ai_sonuc.get("uzun_vadeli_onlemler", [])
+                        if uzun:
+                            st.markdown(
+                                "<div style='margin-top:10px;font-size:11px;color:#64748b'>"
+                                f"<strong style='color:#475569'>Uzun Vadeli:</strong> {' &nbsp;·&nbsp; '.join(uzun)}</div>",
+                                unsafe_allow_html=True
+                            )
+
+                        tekrar = ai_sonuc.get("tekrar_degerlendirme", "")
+                        if tekrar:
+                            st.markdown(
+                                f"<div style='margin-top:6px;font-size:11px;color:#64748b'>"
+                                f"<strong style='color:#475569'>Tekrar REBA:</strong> {tekrar}</div>",
+                                unsafe_allow_html=True
+                            )
+
+                    except Exception as ex:
+                        st.warning(f"AI önerisi alınamadı: {ex}")
+
+        # ── Rapor İndir ────────────────────────────────────
+        st.markdown("---")
         col_p, col_b = st.columns([1, 3])
         with col_p:
             with st.spinner("PDF hazırlanıyor..."):
