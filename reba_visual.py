@@ -1,5 +1,5 @@
 """
-reba_visual.py — Görsel Çıktı Modülü v5.2
+reba_visual.py — Görsel Çıktı Modülü v5.3
 İskelet overlay çizimi ve PDF rapor oluşturma.
 #7: Segment bazlı risk renklendirme
 #6: Adaptive annotation mode (minimal/standard/debug/expert)
@@ -7,6 +7,7 @@ reba_visual.py — Görsel Çıktı Modülü v5.2
 #9: Explainable AI tablosu
 #10: Worksheet formatı PDF
 #12: Önerilen aksiyonlar bölümü
+#13: GitHub Models AI destekli öneri motoru
 """
 
 import cv2
@@ -28,17 +29,12 @@ from reba_core import (
 LM = mp.solutions.pose.PoseLandmark
 POSE_CONNECTIONS = mp.solutions.pose.POSE_CONNECTIONS
 
-# Annotation modları
 ANNOTATION_MODES = {
     "minimal":  "Sadece REBA final skoru",
     "standard": "Kritik segmentler + skor",
     "debug":    "Tüm açılar + modifier'lar",
     "expert":   "Tüm biyomekanik veriler + güven",
 }
-
-# ════════════════════════════════════════════════════════
-# SEGMENT → LANDMARK EŞLEŞMESİ (renklendirme için)
-# ════════════════════════════════════════════════════════
 
 SEGMENT_CONNECTIONS = {
     'boyun': [(LM.LEFT_EAR, LM.LEFT_SHOULDER), (LM.RIGHT_EAR, LM.RIGHT_SHOULDER),
@@ -55,14 +51,12 @@ SEGMENT_CONNECTIONS = {
 
 
 def _hex_to_bgr(hex_color: str) -> tuple:
-    """'#ff0000' → (0, 0, 255) BGR."""
     h = hex_color.lstrip('#')
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return (b, g, r)
 
 
 def _etiket_yaz(img, nokta, metin, renk=(20, 20, 80)):
-    """Arka planlı açı etiketi."""
     x, y = nokta
     h, w = img.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -76,51 +70,32 @@ def _etiket_yaz(img, nokta, metin, renk=(20, 20, 80)):
 
 
 def yuz_blur_uygula(img: np.ndarray, landmarks, genislik: int = 60) -> np.ndarray:
-    """
-    KVKK uyumu için yüz bölgesini bulanıklaştır.
-    Burun, sol/sağ kulak landmark'ları etrafına Gaussian blur elipsi uygular.
-    """
     out = img.copy()
     h, w = img.shape[:2]
-
     yuz_noktalari = [LM.NOSE, LM.LEFT_EAR, LM.RIGHT_EAR,
                      LM.LEFT_EYE, LM.RIGHT_EYE]
-
     gorunen = [(int(landmarks[lm].x * w), int(landmarks[lm].y * h))
                for lm in yuz_noktalari if landmarks[lm].visibility > 0.3]
-
     if not gorunen:
         return out
-
-    # Yüz bbox
     xs = [p[0] for p in gorunen]
     ys = [p[1] for p in gorunen]
     x1 = max(0, min(xs) - genislik)
     y1 = max(0, min(ys) - genislik)
     x2 = min(w, max(xs) + genislik)
     y2 = min(h, max(ys) + genislik)
-
     if x2 <= x1 or y2 <= y1:
         return out
-
-    # Blur bölgesi
     roi = out[y1:y2, x1:x2]
-    blur_size = max(21, genislik | 1)  # Tek sayı garantisi
+    blur_size = max(21, genislik | 1)
     blurred = cv2.GaussianBlur(roi, (blur_size, blur_size), 0)
-
-    # Elips maske ile sadece yüz bölgesini blur et
     mask = np.zeros(roi.shape[:2], dtype=np.uint8)
     cx, cy = (x2-x1)//2, (y2-y1)//2
     cv2.ellipse(mask, (cx, cy), (cx, cy), 0, 0, 360, 255, -1)
     mask_3ch = cv2.merge([mask, mask, mask])
     out[y1:y2, x1:x2] = np.where(mask_3ch > 0, blurred, roi)
-
     return out
 
-
-# ════════════════════════════════════════════════════════
-# #7: SEGMENT BAZLI RİSK RENKLENDİRME OVERLAY
-# ════════════════════════════════════════════════════════
 
 def overlay_ciz(
     img: np.ndarray,
@@ -129,15 +104,8 @@ def overlay_ciz(
     mode: str = "standard",
     yuz_blur: bool = True,
 ) -> np.ndarray:
-    """
-    Fotoğraf üzerine segment bazlı renkli iskelet + açı etiketleri çiz.
-    yuz_blur: KVKK uyumu için yüz bölgesini bulanıklaştır (default: True)
-    mode: minimal / standard / debug / expert
-    """
     h, w = img.shape[:2]
     out = img.copy()
-
-    # KVKK — yüz blur
     if yuz_blur:
         out = yuz_blur_uygula(out, landmarks)
     a = skor.acılar
@@ -151,7 +119,6 @@ def overlay_ciz(
     def v(idx):
         return landmarks[idx].visibility
 
-    # #7: Segment bazlı renklendirme
     seg_renk = {
         'boyun':   _hex_to_bgr(segment_risk_renk(skor.boyun_skoru, SEGMENT_MAX['boyun'])),
         'govde':   _hex_to_bgr(segment_risk_renk(skor.govde_skoru, SEGMENT_MAX['govde'])),
@@ -161,22 +128,18 @@ def overlay_ciz(
         'bilek':   _hex_to_bgr(segment_risk_renk(skor.bilek_skoru, SEGMENT_MAX['bilek'])),
     }
 
-    # Segment bazlı iskelet çiz
     for seg_name, conns in SEGMENT_CONNECTIONS.items():
         col = seg_renk[seg_name]
         for c in conns:
             if landmarks[c[0]].visibility > 0.4 and landmarks[c[1]].visibility > 0.4:
                 cv2.line(out, p(c[0]), p(c[1]), col, 3, cv2.LINE_AA)
 
-    # Eklem noktaları — beyaz dolgu, segment rengiyle çerçeve
     for lm_idx, lm in enumerate(landmarks):
         if lm.visibility > 0.4:
             pt = (int(lm.x * w), int(lm.y * h))
             cv2.circle(out, pt, 5, (255, 255, 255), -1, cv2.LINE_AA)
-            # Hangi segmente ait? En yakın olanı bul
             cv2.circle(out, pt, 5, (80, 80, 80), 1, cv2.LINE_AA)
 
-    # ── REBA SKOR KUTUSU (sol üst, her modda) ──
     s = skor.final_skor
     col_final = _hex_to_bgr(skor.renk)
     cv2.rectangle(out, (8, 8), (200, 70), (255, 255, 255), -1)
@@ -192,18 +155,15 @@ def overlay_ciz(
     if mode == "minimal":
         return out
 
-    # ── AÇI ETİKETLERİ ──
     mid_omuz_x = int((landmarks[LM.LEFT_SHOULDER].x + landmarks[LM.RIGHT_SHOULDER].x) / 2 * w)
     mid_omuz_y = int((landmarks[LM.LEFT_SHOULDER].y + landmarks[LM.RIGHT_SHOULDER].y) / 2 * h)
     mid_kalca_y = int((landmarks[LM.LEFT_HIP].y + landmarks[LM.RIGHT_HIP].y) / 2 * h)
 
-    # #8: Bilateral — analiz tarafındaki eklemleri etiketle
     if a.analiz_tarafi == "sol":
         elbow_lm, wrist_lm = LM.LEFT_ELBOW, LM.LEFT_WRIST
     else:
         elbow_lm, wrist_lm = LM.RIGHT_ELBOW, LM.RIGHT_WRIST
 
-    # Boyun
     if v(LM.NOSE) > 0.4:
         nx, ny = p(LM.NOSE)
         if mode in ("standard", "debug", "expert"):
@@ -215,7 +175,6 @@ def overlay_ciz(
                         f"Boyun:{a.boyun_flexion:.0f}{mod} [{skor.boyun_skoru}]",
                         renk=seg_renk['boyun'])
 
-    # Gövde
     if mode in ("standard", "debug", "expert"):
         gy = (mid_omuz_y + mid_kalca_y) // 2
         mod = ""
@@ -226,7 +185,6 @@ def overlay_ciz(
                     f"Govde:{a.govde_flexion:.0f}{mod} [{skor.govde_skoru}]",
                     renk=seg_renk['govde'])
 
-    # Bacak
     if mode in ("debug", "expert"):
         if v(LM.LEFT_KNEE) > 0.4:
             kx, ky = p(LM.LEFT_KNEE)
@@ -235,7 +193,6 @@ def overlay_ciz(
                         f"Diz:{diz_max:.0f} [{skor.bacak_skoru}]",
                         renk=seg_renk['bacak'])
 
-    # Üst Kol
     if v(elbow_lm) > 0.4:
         ex, ey = p(elbow_lm)
         if mode in ("standard", "debug", "expert"):
@@ -246,7 +203,6 @@ def overlay_ciz(
                         f"UKol:{a.ust_kol_aci:.0f}{mod} [{skor.ust_kol_skoru}]",
                         renk=seg_renk['ust_kol'])
 
-    # Alt Kol + Bilek
     if v(wrist_lm) > 0.4:
         wx, wy = p(wrist_lm)
         if mode in ("debug", "expert"):
@@ -259,7 +215,6 @@ def overlay_ciz(
                         f"Bilek:{a.bilek_aci:.0f}{mod} [{skor.bilek_skoru}]",
                         renk=seg_renk['bilek'])
 
-    # Expert: güven skoru + analiz tarafı
     if mode == "expert":
         _etiket_yaz(out, (w - 200, h - 30),
                     f"Guven:{a.guven:.0%} Taraf:{a.analiz_tarafi}",
@@ -269,15 +224,10 @@ def overlay_ciz(
 
 
 def overlay_to_bytes(overlay_img: np.ndarray, quality: int = 88) -> bytes:
-    """BGR → JPEG bytes."""
     ok, buf = cv2.imencode('.jpg', overlay_img,
                            [cv2.IMWRITE_JPEG_QUALITY, quality])
     return buf.tobytes() if ok else b""
 
-
-# ════════════════════════════════════════════════════════
-# FONT YÖNETİMİ
-# ════════════════════════════════════════════════════════
 
 def _turkce_font_yukle():
     from reportlab.pdfbase import pdfmetrics
@@ -307,16 +257,69 @@ def _turkce_font_yukle():
 
 
 # ════════════════════════════════════════════════════════
+# #12 + #13: AKSİYON ÖNERİ MOTORU
+# github_token verilirse → GitHub Models AI
+# verilmezse → kural tabanlı fallback
+# ════════════════════════════════════════════════════════
+
+def _aksiyon_onerisi(skor: REBASkoru, github_token: str = None) -> List[str]:
+    """
+    github_token verilirse GitHub Models (GPT-4o) üzerinden
+    bağlama duyarlı ISG önerileri üretir.
+    Token yoksa deterministik kural motoru devreye girer.
+    """
+    if github_token:
+        try:
+            from github_advisor import get_aksiyon_listesi
+            return get_aksiyon_listesi(skor, github_token)
+        except Exception:
+            pass  # fallback'e geç
+
+    # Kural tabanlı fallback
+    oneriler = []
+    a = skor.acılar
+
+    if a and skor.boyun_skoru >= 3:
+        oneriler.append(
+            f"Boyun: {a.boyun_flexion:.0f}° fleksiyon tespit edildi. "
+            "Monitör/çalışma yüzeyini göz hizasına getirin.")
+    if a and skor.govde_skoru >= 4:
+        oneriler.append(
+            f"Gövde: {a.govde_flexion:.0f}° öne eğilme. "
+            "Çalışma yüksekliğini artırın veya malzeme erişim mesafesini kısaltın.")
+    if a and skor.bacak_skoru >= 3:
+        diz = max(a.diz_flexion_sol, a.diz_flexion_sag) if a else 0
+        oneriler.append(
+            f"Bacak: Diz {diz:.0f}° fleksiyon. "
+            "Çömelme gerektiren işlemler için platform/kaldırıcı ekipman kullanın.")
+    if a and skor.ust_kol_skoru >= 4:
+        oneriler.append(
+            f"Üst Kol: {a.ust_kol_aci:.0f}° açı. "
+            "Malzeme/alet erişim noktasını omuz seviyesinin altına indirin.")
+    if a and skor.bilek_skoru >= 3:
+        oneriler.append(
+            f"Bilek: {a.bilek_aci:.0f}° sapma + dönüş. "
+            "Ergonomik tutma aparatı veya açılı alet kullanımını değerlendirin.")
+    if skor.yuk_skoru >= 2:
+        oneriler.append(
+            "Yük: 10 kg üstü taşıma. Mekanik kaldırma yardımcısı kullanın.")
+    if skor.aktivite_skoru >= 2:
+        oneriler.append(
+            "Aktivite: Tekrarlı hareket + statik pozisyon. "
+            "İş rotasyonu veya mikro mola programı uygulayın.")
+
+    return oneriler or ["Mevcut risk seviyesi için genel izleme yeterlidir."]
+
+
+# ════════════════════════════════════════════════════════
 # PDF RAPORU
 # ════════════════════════════════════════════════════════
 
-def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
-    """
-    #10: Sayfa 1 = Worksheet formatı (A grubu sol / B grubu sağ)
-    #11: Sayfa 2+ = Foto + overlay + segment detayı
-    #9:  Explainable AI tablosu
-    #12: Önerilen aksiyonlar bölümü
-    """
+def pdf_olustur(
+    form_bilgi: dict,
+    foto_sonuclari: List[FotoSonuc],
+    github_token: str = None,        # #13: AI öneri motoru için
+) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -340,18 +343,18 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     CIZGI = colors.HexColor('#cbd5e1')
 
     def rk(skor):
-        if skor <= 1:   return colors.HexColor('#dcfce7')
-        elif skor <= 3: return colors.HexColor('#ecfccb')
-        elif skor <= 7: return colors.HexColor('#fef9c3')
+        if skor <= 1:    return colors.HexColor('#dcfce7')
+        elif skor <= 3:  return colors.HexColor('#ecfccb')
+        elif skor <= 7:  return colors.HexColor('#fef9c3')
         elif skor <= 10: return colors.HexColor('#fee2e2')
-        else:           return colors.HexColor('#ede9fe')
+        else:            return colors.HexColor('#ede9fe')
 
     def rt(skor):
-        if skor <= 1:   return colors.HexColor('#16a34a')
-        elif skor <= 3: return colors.HexColor('#65a30d')
-        elif skor <= 7: return colors.HexColor('#d97706')
+        if skor <= 1:    return colors.HexColor('#16a34a')
+        elif skor <= 3:  return colors.HexColor('#65a30d')
+        elif skor <= 7:  return colors.HexColor('#d97706')
         elif skor <= 10: return colors.HexColor('#dc2626')
-        else:           return colors.HexColor('#7c3aed')
+        else:            return colors.HexColor('#7c3aed')
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -381,20 +384,15 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
 
     story = []
 
-    # ══════════════════════════════════════
-    # SAYFA 1 — BAŞLIK + FORM + WORKSHEET
-    # ══════════════════════════════════════
-
     story.append(P("REBA Ergonomi Risk Analiz Raporu",
                    bold=True, size=18, color=KOYU, space_after=6))
     story.append(Spacer(1, 0.1*cm))
     story.append(P(
-        "Rapid Entire Body Assessment  |  AI Destekli Postür Analizi  |  v5.2",
+        "Rapid Entire Body Assessment  |  AI Destekli Postür Analizi  |  v5.3",
         size=8, color=colors.HexColor('#64748b'), space_after=10))
     story.append(HRFlowable(width="100%", thickness=2, color=KOYU))
     story.append(Spacer(1, 0.3*cm))
 
-    # Form bilgileri
     story.append(P("Form Bilgileri", bold=True, size=10, color=KOYU, space_after=4))
     fr = [
         [P("Bölüm", bold=True),       form_bilgi.get('bolum', '—'),
@@ -415,7 +413,6 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(tf)
     story.append(Spacer(1, 0.3*cm))
 
-    # Manuel parametreler (kompakt)
     story.append(P("Manuel Parametreler", bold=True, size=10, color=KOYU, space_after=3))
     mp_rows = [
         ["Yük", f"+{form_bilgi.get('yuk_skoru',0)} ({form_bilgi.get('yuk_kg',0)} kg)",
@@ -436,9 +433,6 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(tmp)
     story.append(Spacer(1, 0.3*cm))
 
-    # ── #10: WORKSHEET FORMATI ──
-    # A Grubu (Boyun, Gövde, Bacak) + B Grubu (Kol, Bilek) yan yana
-    # En yüksek skorlu fotonun verilerini kullan
     en_yuk_fs = max(gecerli, key=lambda x: x.skor.final_skor)
     sk = en_yuk_fs.skor
     ac = sk.acılar
@@ -446,10 +440,9 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(P("REBA Worksheet — En Yüksek Skorlu Analiz",
                    bold=True, size=10, color=KOYU, space_after=4))
 
-    # Modifikatör metinleri
     boyun_mod = []
     if ac and ac.boyun_extension: boyun_mod.append("Extension +1")
-    if ac and ac.boyun_yan_egim > 15: boyun_mod.append(f"Yana eğme +1")
+    if ac and ac.boyun_yan_egim > 15: boyun_mod.append("Yana eğme +1")
     if ac and ac.boyun_donus: boyun_mod.append("Dönüş +1")
 
     govde_mod = []
@@ -465,7 +458,6 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     taraf = ac.analiz_tarafi if ac else "—"
     diz_max = max(ac.diz_flexion_sol, ac.diz_flexion_sag) if ac else 0
 
-    # A GRUBU — tek tablo
     story.append(P("A Grubu: Boyun — Gövde — Bacak",
                    bold=True, size=9, color=KOYU, space_after=3))
     a_rows = [
@@ -484,8 +476,7 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
          "Bilateral" if (ac and ac.bilateral_destek) else "Tek ayak"],
         [P("Tablo A", bold=True), "", P(str(sk.tablo_a), bold=True), ""],
         [P("+ Yük Skoru", bold=True), "", f"+{sk.yuk_skoru}", ""],
-        [P("= Skor A", bold=True), "",
-         P(str(sk.skor_a), bold=True), ""],
+        [P("= Skor A", bold=True), "", P(str(sk.skor_a), bold=True), ""],
     ]
     ta = Table(a_rows, colWidths=[4*cm, 3*cm, 2.5*cm, 8.5*cm])
     tsa = ts_base()
@@ -496,7 +487,6 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(ta)
     story.append(Spacer(1, 0.25*cm))
 
-    # B GRUBU — tek tablo
     story.append(P("B Grubu: Üst Kol — Alt Kol — Bilek",
                    bold=True, size=9, color=KOYU, space_after=3))
     b_rows = [
@@ -515,8 +505,7 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
          "Dönüş +1" if (ac and ac.bilek_donus) else "—"],
         [P("Tablo B", bold=True), "", P(str(sk.tablo_b), bold=True), ""],
         [P("+ Tutma Skoru", bold=True), "", f"+{sk.tutma_skoru}", ""],
-        [P("= Skor B", bold=True), "",
-         P(str(sk.skor_b), bold=True), ""],
+        [P("= Skor B", bold=True), "", P(str(sk.skor_b), bold=True), ""],
     ]
     tb = Table(b_rows, colWidths=[4*cm, 3*cm, 2.5*cm, 8.5*cm])
     tsb = ts_base()
@@ -527,26 +516,22 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(tb)
     story.append(Spacer(1, 0.25*cm))
 
-    # FİNAL SKOR
     story.append(P("Final Hesaplama", bold=True, size=9, color=KOYU, space_after=3))
     final_rows = [
         ["Adım", "Hesaplama", "Sonuç"],
-        ["Tablo C",
-         f"Skor A({sk.skor_a}) × Skor B({sk.skor_b})",
-         str(sk.skor_c)],
+        ["Tablo C", f"Skor A({sk.skor_a}) × Skor B({sk.skor_b})", str(sk.skor_c)],
         ["+ Aktivite", f"+{sk.aktivite_skoru}", ""],
         [P("NİHAİ REBA", bold=True), "", P(str(sk.final_skor), bold=True)],
     ]
     tfin = Table(final_rows, colWidths=[4*cm, 9*cm, 5*cm])
     stfin = ts_base()
-    stfin.add('FONTSIZE',  (2,-1), (2,-1), 14)
+    stfin.add('FONTSIZE', (2,-1), (2,-1), 14)
     stfin.add('TEXTCOLOR', (2,-1), (2,-1), rt(sk.final_skor))
     stfin.add('BACKGROUND', (0,-1), (-1,-1), rk(sk.final_skor))
     tfin.setStyle(stfin)
     story.append(tfin)
     story.append(Spacer(1, 0.3*cm))
 
-    # Genel özet
     story.append(P("Genel Değerlendirme", bold=True, size=10, color=KOYU, space_after=3))
     oz = [
         ["Fotoğraf", "Ortalama REBA", "En Yüksek", "Risk Seviyesi", "Aksiyon"],
@@ -562,7 +547,6 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     story.append(to)
     story.append(Spacer(1, 0.3*cm))
 
-    # Risk skalası
     story.append(P("REBA Risk Skalası", bold=True, size=9, color=KOYU, space_after=3))
     rsr = [
         ["Skor", "Risk", "Önlem"],
@@ -584,17 +568,13 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
     trs.setStyle(strs)
     story.append(trs)
 
-    # ══════════════════════════════════════
-    # SAYFA 2+ — HER FOTO İÇİN
-    # ══════════════════════════════════════
-
+    # ── Foto sayfaları ──
     img_buffers = {}
     for fs in gecerli:
         if fs.overlay_img is not None:
             jpg = overlay_to_bytes(fs.overlay_img, quality=88)
             if jpg:
-                img_buf = io.BytesIO(jpg)
-                img_buffers[fs.idx] = img_buf
+                img_buffers[fs.idx] = io.BytesIO(jpg)
 
     for idx, fs in enumerate(gecerli, 1):
         story.append(PageBreak())
@@ -610,7 +590,6 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
         story.append(HRFlowable(width="100%", thickness=1.5, color=KOYU))
         story.append(Spacer(1, 0.2*cm))
 
-        # Overlay görsel
         if fs.idx in img_buffers:
             img_buf = img_buffers[fs.idx]
             img_buf.seek(0)
@@ -621,11 +600,9 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
             if img_h > max_h:
                 img_h = max_h
                 img_w = img_h * (ow / oh)
-            rl_img = RLImage(img_buf, width=img_w, height=img_h)
-            story.append(rl_img)
+            story.append(RLImage(img_buf, width=img_w, height=img_h))
             story.append(Spacer(1, 0.2*cm))
 
-        # #9: Explainable AI tablosu
         if s.aciklama:
             story.append(P("Neden Bu Skor? — Segment Analizi",
                            bold=True, size=10, color=KOYU, space_after=3))
@@ -642,7 +619,6 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
             story.append(te)
             story.append(Spacer(1, 0.2*cm))
 
-        # Skor hesaplama
         story.append(P("Skor Hesaplama", bold=True, size=10, color=KOYU, space_after=3))
         hr = [
             ["Adım", "Hesaplama", "Sonuç"],
@@ -662,70 +638,25 @@ def pdf_olustur(form_bilgi: dict, foto_sonuclari: List[FotoSonuc]) -> bytes:
         th.setStyle(sth)
         story.append(th)
 
-        # #12: Önerilen aksiyonlar
+        # #12 + #13: AI destekli öneriler
         if s.final_skor >= 4:
             story.append(Spacer(1, 0.2*cm))
-            story.append(P("Önerilen Aksiyonlar", bold=True, size=10, color=KOYU, space_after=3))
-            aksiyonlar = _aksiyon_onerisi(s)
+            oneri_baslik = "Önerilen Aksiyonlar (AI Destekli)" if github_token else "Önerilen Aksiyonlar"
+            story.append(P(oneri_baslik, bold=True, size=10, color=KOYU, space_after=3))
+            aksiyonlar = _aksiyon_onerisi(s, github_token)
             for aks in aksiyonlar:
                 story.append(P(f"• {aks}", size=8, space_after=2))
 
-        # Footer
         story.append(Spacer(1, 0.3*cm))
         story.append(HRFlowable(width="100%", thickness=0.5, color=CIZGI))
         story.append(P(
-            "REBA Analiz Ajanı v5.2  |  Hignett & McAtamney (2000)  |  "
+            "REBA Analiz Ajanı v5.3  |  Hignett & McAtamney (2000)  |  "
             "AI açı tahmini ±3-5° doğruluk payı içerir",
             size=7, color=colors.HexColor('#94a3b8')))
 
     doc.build(story)
     buf.seek(0)
     return buf.getvalue()
-
-
-# ════════════════════════════════════════════════════════
-# #12: AKSİYON ÖNERİ MOTORU
-# ════════════════════════════════════════════════════════
-
-def _aksiyon_onerisi(skor: REBASkoru) -> List[str]:
-    """Segment skorlarına göre spesifik aksiyon önerileri üret."""
-    oneriler = []
-    a = skor.acılar
-
-    if skor.boyun_skoru >= 3:
-        oneriler.append(
-            f"Boyun: {a.boyun_flexion:.0f}° fleksiyon tespit edildi. "
-            "Monitör/çalışma yüzeyini göz hizasına getirin.")
-    if skor.govde_skoru >= 4:
-        oneriler.append(
-            f"Gövde: {a.govde_flexion:.0f}° öne eğilme. "
-            "Çalışma yüksekliğini artırın veya malzeme erişim mesafesini kısaltın.")
-    if skor.bacak_skoru >= 3:
-        diz = max(a.diz_flexion_sol, a.diz_flexion_sag) if a else 0
-        oneriler.append(
-            f"Bacak: Diz {diz:.0f}° fleksiyon. "
-            "Çömelme gerektiren işlemler için platform/kaldırıcı ekipman kullanın.")
-    if skor.ust_kol_skoru >= 4:
-        oneriler.append(
-            f"Üst Kol: {a.ust_kol_aci:.0f}° açı. "
-            "Malzeme/alet erişim noktasını omuz seviyesinin altına indirin.")
-    if skor.bilek_skoru >= 3:
-        oneriler.append(
-            f"Bilek: {a.bilek_aci:.0f}° sapma + dönüş. "
-            "Ergonomik tutma aparatı veya açılı alet kullanımını değerlendirin.")
-
-    if skor.yuk_skoru >= 2:
-        oneriler.append(
-            "Yük: 10 kg üstü taşıma. Mekanik kaldırma yardımcısı kullanın.")
-    if skor.aktivite_skoru >= 2:
-        oneriler.append(
-            "Aktivite: Tekrarlı hareket + statik pozisyon. "
-            "İş rotasyonu veya mikro mola programı uygulayın.")
-
-    if not oneriler:
-        oneriler.append("Mevcut risk seviyesi için genel izleme yeterlidir.")
-
-    return oneriler
 
 
 # ════════════════════════════════════════════════════════
@@ -738,12 +669,8 @@ def video_pdf_olustur(
     en_riskli_frame: 'np.ndarray',
     en_riskli_skor: 'REBASkoru',
     sure_sn: float,
+    github_token: str = None,        # #13: AI öneri motoru için
 ) -> bytes:
-    """
-    Video analizi için 2 sayfalık PDF rapor.
-    Sayfa 1: Özet + metrikler + risk dağılımı + frame tablosu + en riskli kare
-    Sayfa 2: Worksheet + segment analizi + explainable AI + aksiyonlar
-    """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -767,28 +694,28 @@ def video_pdf_olustur(
 
     dagilim = {'Önemsiz/Düşük': 0, 'Orta': 0, 'Yüksek': 0, 'Çok Yüksek': 0}
     for s in tum_skorlar:
-        if s <= 3: dagilim['Önemsiz/Düşük'] += 1
+        if s <= 3:   dagilim['Önemsiz/Düşük'] += 1
         elif s <= 7: dagilim['Orta'] += 1
         elif s <= 10: dagilim['Yüksek'] += 1
-        else: dagilim['Çok Yüksek'] += 1
+        else:        dagilim['Çok Yüksek'] += 1
 
     KOYU  = colors.HexColor('#1e3a5f')
     ACIK  = colors.HexColor('#f0f4f8')
     CIZGI = colors.HexColor('#cbd5e1')
 
     def rk(skor):
-        if skor <= 1:   return colors.HexColor('#dcfce7')
-        elif skor <= 3: return colors.HexColor('#ecfccb')
-        elif skor <= 7: return colors.HexColor('#fef9c3')
+        if skor <= 1:    return colors.HexColor('#dcfce7')
+        elif skor <= 3:  return colors.HexColor('#ecfccb')
+        elif skor <= 7:  return colors.HexColor('#fef9c3')
         elif skor <= 10: return colors.HexColor('#fee2e2')
-        else:           return colors.HexColor('#ede9fe')
+        else:            return colors.HexColor('#ede9fe')
 
     def rt(skor):
-        if skor <= 1:   return colors.HexColor('#16a34a')
-        elif skor <= 3: return colors.HexColor('#65a30d')
-        elif skor <= 7: return colors.HexColor('#d97706')
+        if skor <= 1:    return colors.HexColor('#16a34a')
+        elif skor <= 3:  return colors.HexColor('#65a30d')
+        elif skor <= 7:  return colors.HexColor('#d97706')
         elif skor <= 10: return colors.HexColor('#dc2626')
-        else:           return colors.HexColor('#7c3aed')
+        else:            return colors.HexColor('#7c3aed')
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -818,20 +745,15 @@ def video_pdf_olustur(
 
     story = []
 
-    # ══════════════════════════════════════
-    # SAYFA 1 — ÖZET + TABLO + GÖRSEL
-    # ══════════════════════════════════════
-
     story.append(P("REBA Video Analiz Raporu",
                    bold=True, size=18, color=KOYU, space_after=6))
     story.append(Spacer(1, 0.1*cm))
     story.append(P(
-        "Rapid Entire Body Assessment  |  Video Postür Analizi  |  v5.2",
+        "Rapid Entire Body Assessment  |  Video Postür Analizi  |  v5.3",
         size=8, color=colors.HexColor('#64748b'), space_after=10))
     story.append(HRFlowable(width="100%", thickness=2, color=KOYU))
     story.append(Spacer(1, 0.3*cm))
 
-    # Form bilgileri
     story.append(P("Form Bilgileri", bold=True, size=10, color=KOYU, space_after=4))
     fr = [
         [P("Bölüm", bold=True),       form_bilgi.get('bolum', '—'),
@@ -852,7 +774,6 @@ def video_pdf_olustur(
     story.append(tf)
     story.append(Spacer(1, 0.3*cm))
 
-    # Manuel parametreler
     story.append(P("Manuel Parametreler", bold=True, size=10, color=KOYU, space_after=3))
     mp_rows = [[
         "Yük", f"+{form_bilgi.get('yuk_skoru',0)} ({form_bilgi.get('yuk_kg',0)} kg)",
@@ -873,7 +794,6 @@ def video_pdf_olustur(
     story.append(tmp)
     story.append(Spacer(1, 0.3*cm))
 
-    # Metrikler tablosu
     story.append(P("Genel Metrikler", bold=True, size=10, color=KOYU, space_after=4))
     met_rows = [
         ["Ortalama REBA", "%90 Persentil", "En Yüksek", "En Düşük"],
@@ -892,7 +812,6 @@ def video_pdf_olustur(
     story.append(tm)
     story.append(Spacer(1, 0.3*cm))
 
-    # Risk dağılımı
     story.append(P("Risk Dağılımı", bold=True, size=10, color=KOYU, space_after=4))
     dag_rows = [["Risk Seviyesi", "Kare Sayısı", "Yüzde"]]
     renk_map_pdf = {
@@ -913,7 +832,6 @@ def video_pdf_olustur(
     story.append(td)
     story.append(Spacer(1, 0.3*cm))
 
-    # En riskli kare görseli
     if en_riskli_frame is not None:
         story.append(P(f"En Riskli Kare — REBA {en_yuk}",
                        bold=True, size=10, color=KOYU, space_after=4))
@@ -921,7 +839,6 @@ def video_pdf_olustur(
             (v['zaman'] for v in video_sonuclari if v['skor'] == en_yuk), 0)
         story.append(P(f"Zaman: {en_riskli_zaman:.1f}s · {en_riskli_skor.risk_seviyesi}",
                        size=8, color=colors.HexColor('#64748b'), space_after=4))
-
         jpg = overlay_to_bytes(en_riskli_frame, quality=88)
         if jpg:
             img_buf = io.BytesIO(jpg)
@@ -932,19 +849,13 @@ def video_pdf_olustur(
             if img_h > max_h:
                 img_h = max_h
                 img_w = img_h * (ow / oh)
-            rl_img = RLImage(img_buf, width=img_w, height=img_h)
-            story.append(rl_img)
+            story.append(RLImage(img_buf, width=img_w, height=img_h))
             story.append(Spacer(1, 0.3*cm))
 
-    # Frame bazlı skor tablosu
     story.append(P("Kare Bazlı REBA Skorları", bold=True, size=10, color=KOYU, space_after=4))
     frame_rows = [["Zaman (s)", "REBA Skoru", "Risk Seviyesi"]]
     for v in video_sonuclari:
-        frame_rows.append([
-            f"{v['zaman']:.1f}",
-            str(v['skor']),
-            v['risk'],
-        ])
+        frame_rows.append([f"{v['zaman']:.1f}", str(v['skor']), v['risk']])
     tf2 = Table(frame_rows, colWidths=[4*cm, 4*cm, 10*cm])
     stf2 = ts_base()
     stf2.add('ALIGN', (0,0), (1,-1), 'CENTER')
@@ -955,15 +866,12 @@ def video_pdf_olustur(
     tf2.setStyle(stf2)
     story.append(tf2)
 
-    # ══════════════════════════════════════
-    # SAYFA 2 — WORKSHEET + SEGMENT + AKSİYON
-    # ══════════════════════════════════════
-
+    # ── Sayfa 2: Worksheet + Segment + Aksiyon ──
     story.append(PageBreak())
     sk = en_riskli_skor
     ac = sk.acılar
 
-    story.append(P(f"En Riskli Kare — Detaylı REBA Analizi",
+    story.append(P("En Riskli Kare — Detaylı REBA Analizi",
                    bold=True, size=16, color=KOYU, space_after=6))
     story.append(Spacer(1, 0.1*cm))
     story.append(P(
@@ -972,21 +880,20 @@ def video_pdf_olustur(
     story.append(HRFlowable(width="100%", thickness=1.5, color=KOYU))
     story.append(Spacer(1, 0.25*cm))
 
-    # A Grubu
     if ac:
         boyun_mod = []
-        if ac.boyun_extension: boyun_mod.append("Extension +1")
-        if ac.boyun_yan_egim > 0: boyun_mod.append("Yana eğme +1")
-        if ac.boyun_donus: boyun_mod.append("Dönüş +1")
+        if ac.boyun_extension:     boyun_mod.append("Extension +1")
+        if ac.boyun_yan_egim > 0:  boyun_mod.append("Yana eğme +1")
+        if ac.boyun_donus:         boyun_mod.append("Dönüş +1")
 
         govde_mod = []
-        if ac.govde_extension: govde_mod.append("Extension +1")
-        if ac.govde_yan_egim > 0: govde_mod.append("Yana eğme +1")
-        if ac.govde_donus: govde_mod.append("Dönüş +1")
+        if ac.govde_extension:     govde_mod.append("Extension +1")
+        if ac.govde_yan_egim > 0:  govde_mod.append("Yana eğme +1")
+        if ac.govde_donus:         govde_mod.append("Dönüş +1")
 
         ukol_mod = []
         if ac.omuz_kalkmis: ukol_mod.append("Omuz kalkış +1")
-        if ac.kol_abdukte: ukol_mod.append("Abdüksiyon +1")
+        if ac.kol_abdukte:  ukol_mod.append("Abdüksiyon +1")
         if ac.kol_destekli: ukol_mod.append("Destekli -1")
 
         diz_max = max(ac.diz_flexion_sol, ac.diz_flexion_sag)
@@ -996,10 +903,8 @@ def video_pdf_olustur(
                        bold=True, size=9, color=KOYU, space_after=3))
         a_rows = [
             ["Segment", "Açı", "Skor", "Modifikatör"],
-            ["Boyun", f"{ac.boyun_flexion:.0f}°", str(sk.boyun_skoru),
-             ", ".join(boyun_mod) or "—"],
-            ["Gövde", f"{ac.govde_flexion:.0f}°", str(sk.govde_skoru),
-             ", ".join(govde_mod) or "—"],
+            ["Boyun", f"{ac.boyun_flexion:.0f}°", str(sk.boyun_skoru), ", ".join(boyun_mod) or "—"],
+            ["Gövde", f"{ac.govde_flexion:.0f}°", str(sk.govde_skoru), ", ".join(govde_mod) or "—"],
             ["Bacak", f"Diz {diz_max:.0f}°", str(sk.bacak_skoru),
              "Bilateral" if ac.bilateral_destek else "Tek ayak"],
             [P("Tablo A", bold=True), "", P(str(sk.tablo_a), bold=True), ""],
@@ -1019,10 +924,8 @@ def video_pdf_olustur(
                        bold=True, size=9, color=KOYU, space_after=3))
         b_rows = [
             ["Segment", "Açı", "Skor", "Modifikatör"],
-            [f"Üst Kol ({taraf})", f"{ac.ust_kol_aci:.0f}°",
-             str(sk.ust_kol_skoru), ", ".join(ukol_mod) or "—"],
-            [f"Alt Kol ({taraf})", f"{ac.alt_kol_aci:.0f}°",
-             str(sk.alt_kol_skoru),
+            [f"Üst Kol ({taraf})", f"{ac.ust_kol_aci:.0f}°", str(sk.ust_kol_skoru), ", ".join(ukol_mod) or "—"],
+            [f"Alt Kol ({taraf})", f"{ac.alt_kol_aci:.0f}°", str(sk.alt_kol_skoru),
              "60-100° arası" if sk.alt_kol_skoru==1 else "Aralık dışı"],
             [f"Bilek ({taraf})", f"{ac.bilek_aci:.0f}°", str(sk.bilek_skoru),
              "Dönüş +1" if ac.bilek_donus else "—"],
@@ -1039,7 +942,6 @@ def video_pdf_olustur(
         story.append(tb)
         story.append(Spacer(1, 0.25*cm))
 
-    # Final skor
     story.append(P("Final Hesaplama", bold=True, size=9, color=KOYU, space_after=3))
     final_rows = [
         ["Adım", "Hesaplama", "Sonuç"],
@@ -1056,7 +958,6 @@ def video_pdf_olustur(
     story.append(tfin)
     story.append(Spacer(1, 0.25*cm))
 
-    # Explainable AI
     if sk.aciklama:
         story.append(P("Neden Bu Skor? — Segment Analizi",
                        bold=True, size=10, color=KOYU, space_after=3))
@@ -1073,18 +974,17 @@ def video_pdf_olustur(
         story.append(te)
         story.append(Spacer(1, 0.25*cm))
 
-    # Önerilen aksiyonlar
+    # #12 + #13: AI destekli öneriler
     if sk.final_skor >= 4:
-        story.append(P("Önerilen Aksiyonlar",
-                       bold=True, size=10, color=KOYU, space_after=3))
-        for aks in _aksiyon_onerisi(sk):
+        oneri_baslik = "Önerilen Aksiyonlar (AI Destekli)" if github_token else "Önerilen Aksiyonlar"
+        story.append(P(oneri_baslik, bold=True, size=10, color=KOYU, space_after=3))
+        for aks in _aksiyon_onerisi(sk, github_token):
             story.append(P(f"• {aks}", size=8, space_after=3))
 
-    # Footer
     story.append(Spacer(1, 0.4*cm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=CIZGI))
     story.append(P(
-        "REBA Analiz Ajanı v5.2  |  Hignett & McAtamney (2000)  |  "
+        "REBA Analiz Ajanı v5.3  |  Hignett & McAtamney (2000)  |  "
         "AI tabanlı açı tahmini ±3-5° doğruluk payı içerir",
         size=7, color=colors.HexColor('#94a3b8')))
 
