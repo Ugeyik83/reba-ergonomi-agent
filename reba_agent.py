@@ -1,5 +1,5 @@
 """
-reba_agent.py — Streamlit Arayüzü v5.2
+reba_agent.py — Streamlit Arayüzü v5.3
 REBA Ergonomi Risk Analiz Sistemi
 #5: Düşük güven uyarısı
 #6: Adaptive annotation mode
@@ -151,7 +151,7 @@ st.markdown("""
     <div>
         <h1>REBA Ergonomi Risk Analiz Sistemi</h1>
         <p>Rapid Entire Body Assessment &nbsp;·&nbsp; Çoklu Fotoğraf &nbsp;·&nbsp;
-           AI Postür Analizi &nbsp;·&nbsp; v5.2</p>
+           AI Postür Analizi &nbsp;·&nbsp; v5.3</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -693,7 +693,10 @@ if calistir and form_tamam and yuklenen:
         with col_p:
             with st.spinner("PDF hazırlanıyor..."):
                 try:
-                    pdf_bytes = pdf_olustur(form_bilgi, foto_sonuclari)
+                    pdf_bytes = pdf_olustur(
+                        form_bilgi, foto_sonuclari,
+                        github_token=st.secrets.get("GITHUB_TOKEN"),
+                    )
                 except Exception as e:
                     pdf_bytes = b""
                     st.error(f"PDF hatası: {e}")
@@ -979,7 +982,9 @@ if calistir and form_tamam and yuklenen_video:
                 try:
                     vpdf = video_pdf_olustur(
                         form_bilgi_v, video_sonuclari,
-                        en_riskli_frame, en_riskli_skor_obj, sure_sn)
+                        en_riskli_frame, en_riskli_skor_obj, sure_sn,
+                        github_token=st.secrets.get("GITHUB_TOKEN"),
+                    )
                 except Exception as e:
                     vpdf = b""
                     st.error(f"Video PDF hatası: {e}")
@@ -1007,7 +1012,7 @@ if calistir and form_tamam and yuklenen_video:
 
 st.markdown("""
 <div class="app-footer">
-    REBA Ergonomi Risk Analiz Sistemi v5.2 &nbsp;·&nbsp;
+    REBA Ergonomi Risk Analiz Sistemi v5.3 &nbsp;·&nbsp;
     Hignett & McAtamney (2000), Applied Ergonomics 31(2), 201–205 &nbsp;·&nbsp;
     MediaPipe Pose (Google LLC) &nbsp;·&nbsp;
     AI tabanlı açı tahmini ±3–5° doğruluk payı içerir —
