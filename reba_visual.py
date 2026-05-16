@@ -262,16 +262,17 @@ def _turkce_font_yukle():
 # verilmezse → kural tabanlı fallback
 # ════════════════════════════════════════════════════════
 
-def _aksiyon_onerisi(skor: REBASkoru, github_token: str = None) -> List[str]:
+def _aksiyon_onerisi(skor: REBASkoru, github_token: str = None,
+                     form_bilgi: dict = None, overlay_img=None) -> List[str]:
     """
-    github_token verilirse GitHub Models (GPT-4o) üzerinden
-    bağlama duyarlı ISG önerileri üretir.
+    github_token verilirse GitHub Models GPT-4o Vision üzerinden
+    fotoğraf + bağlama duyarlı ISG önerileri üretir.
     Token yoksa deterministik kural motoru devreye girer.
     """
     if github_token:
         try:
             from github_advisor import get_aksiyon_listesi
-            return get_aksiyon_listesi(skor, github_token)
+            return get_aksiyon_listesi(skor, github_token, form_bilgi, overlay_img)
         except Exception:
             pass  # fallback'e geç
 
@@ -318,7 +319,7 @@ def _aksiyon_onerisi(skor: REBASkoru, github_token: str = None) -> List[str]:
 def pdf_olustur(
     form_bilgi: dict,
     foto_sonuclari: List[FotoSonuc],
-    github_token: str = None,        # #13: AI öneri motoru için
+    github_token: str = None,
 ) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
@@ -643,7 +644,7 @@ def pdf_olustur(
             story.append(Spacer(1, 0.2*cm))
             oneri_baslik = "Önerilen Aksiyonlar (AI Destekli)" if github_token else "Önerilen Aksiyonlar"
             story.append(P(oneri_baslik, bold=True, size=10, color=KOYU, space_after=3))
-            aksiyonlar = _aksiyon_onerisi(s, github_token)
+            aksiyonlar = _aksiyon_onerisi(s, github_token, form_bilgi, fs.overlay_img)
             for aks in aksiyonlar:
                 story.append(P(f"• {aks}", size=8, space_after=2))
 
@@ -978,7 +979,7 @@ def video_pdf_olustur(
     if sk.final_skor >= 4:
         oneri_baslik = "Önerilen Aksiyonlar (AI Destekli)" if github_token else "Önerilen Aksiyonlar"
         story.append(P(oneri_baslik, bold=True, size=10, color=KOYU, space_after=3))
-        for aks in _aksiyon_onerisi(sk, github_token):
+        for aks in _aksiyon_onerisi(sk, github_token, form_bilgi, en_riskli_frame):
             story.append(P(f"• {aks}", size=8, space_after=3))
 
     story.append(Spacer(1, 0.4*cm))
