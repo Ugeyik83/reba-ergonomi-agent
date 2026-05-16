@@ -1,4 +1,4 @@
-# 🦺 REBA Ergonomi Risk Analiz Sistemi v5.2
+# 🦺 REBA Ergonomi Risk Analiz Sistemi v5.3
 
 **Rapid Entire Body Assessment** — İSG uzmanları için AI destekli postür analiz aracı.
 
