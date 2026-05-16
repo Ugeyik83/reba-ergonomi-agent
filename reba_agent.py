@@ -492,8 +492,7 @@ if calistir and form_tamam and yuklenen:
             <div class="metric-box">
                 <div class="val" style="color:#0f172a">{len(gecerli)}</div>
                 <div class="lbl">Analiz Edilen</div>
-                {f'<div style="font-size:10px;color:#dc2626;margin-top:2px">{len(foto_sonuclari)-len(gecerli)} başarısız</div>'
-                 if len(foto_sonuclari) > len(gecerli) else ''}
+                {"" if len(foto_sonuclari) == len(gecerli) else f'<span style="font-size:10px;color:#dc2626;margin-top:2px;display:block">{len(foto_sonuclari)-len(gecerli)} başarısız</span>'}
             </div>
         </div>
         """, unsafe_allow_html=True)
